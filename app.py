@@ -1,53 +1,52 @@
-import os
-import time
+import urllib.parse
+from flask import Flask, request, jsonify
 import requests
-from flask import Flask, jsonify, request
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-# Credenciales inyectadas de forma segura desde el entorno de Render
-API_KEY = os.environ.get("GOOGLE_API_KEY")
-CX_ID = os.environ.get("GOOGLE_CX_ID")
-
-def buscar_en_google_oficial(query):
-    url = f"https://googleapis.com{API_KEY}&cx={CX_ID}&q={query}"
-    for intento in range(5):
-        try:
-            headers = {'User-Agent': 'ViernesAgentEngine/1.0 (Autonomous B2B Bot)'}
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 429:
-                time.sleep(2 ** intento)
-                continue
-            response.raise_for_status()
-            data = response.json()
+def scraping_alternativo(termino):
+    resultados = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    # Buscador DuckDuckGo Lite para evitar captchas y bloqueos
+    url_busqueda = f"https://duckduckgo.com{urllib.parse.quote(termino)}"
+    
+    try:
+        res = requests.get(url_busqueda, headers=headers, timeout=8)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            # Encontrar los bloques de resultados orgánicos
+            links = soup.find_all("a", class_="result__url")
             
-            items = data.get('items', [])
-            resultados = []
-            for item in items:
-                resultados.append({
-                    'titulo': item.get('title', 'Sin título'),
-                    'enlace': item.get('link', '')
-                })
-            return resultados
-        except Exception:
-            time.sleep(2 ** intento)
-    return []
+            for link in links[:5]:  # Extraer los primeros 5 enlaces
+                url_limpia = link.get("href", "").strip()
+                if url_limpia:
+                    resultados.append({
+                        "fuente": "VIERNES Engine (DDG)",
+                        "url": url_limpia
+                    })
+    except Exception as e:
+        print(f"Error en el motor de scraping: {e}")
+        
+    return resultados
 
-@app.route('/')
-def home():
-    return jsonify({"estado": "VIERNES operando en la nube", "motor": "Activo"})
-
-@app.route('/buscar')
-def ejecutar_busqueda():
-    # Captura el término de búsqueda desde la URL (ej: /buscar?q=tecnologia)
-    query = request.args.get('q', 'arbitraje agéntico B2B')
-    datos_extraidos = buscar_en_google_oficial(query)
+@app.route("/buscar", methods=["GET"])
+def buscar():
+    termino = request.args.get("termino")
+    
+    if not termino:
+        return jsonify({"error": "El parámetro 'termino' es obligatorio"}), 400
+        
+    # Activación del motor alternativo automático
+    datos_extraidos = scraping_alternativo(termino)
+    
     return jsonify({
         "motor": "VIERNES Data Extractor",
-        "termino_buscado": query,
+        "termino_buscado": termino,
         "resultados": datos_extraidos
     })
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
