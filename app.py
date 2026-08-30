@@ -1,12 +1,16 @@
 import os
 import time
 import requests
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-def buscar_en_google_oficial(query, api_key, cx_id):
-    url = f"https://googleapis.com{api_key}&cx={cx_id}&q={query}"
+# Credenciales inyectadas de forma segura desde el entorno de Render
+API_KEY = os.environ.get("GOOGLE_API_KEY")
+CX_ID = os.environ.get("GOOGLE_CX_ID")
+
+def buscar_en_google_oficial(query):
+    url = f"https://googleapis.com{API_KEY}&cx={CX_ID}&q={query}"
     for intento in range(5):
         try:
             headers = {'User-Agent': 'ViernesAgentEngine/1.0 (Autonomous B2B Bot)'}
@@ -31,8 +35,18 @@ def buscar_en_google_oficial(query, api_key, cx_id):
 
 @app.route('/')
 def home():
-    # Endpoint de verificación para que Render sepa que VIERNES está vivo
     return jsonify({"estado": "VIERNES operando en la nube", "motor": "Activo"})
+
+@app.route('/buscar')
+def ejecutar_busqueda():
+    # Captura el término de búsqueda desde la URL (ej: /buscar?q=tecnologia)
+    query = request.args.get('q', 'arbitraje agéntico B2B')
+    datos_extraidos = buscar_en_google_oficial(query)
+    return jsonify({
+        "motor": "VIERNES Data Extractor",
+        "termino_buscado": query,
+        "resultados": datos_extraidos
+    })
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
