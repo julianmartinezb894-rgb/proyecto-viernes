@@ -43,24 +43,22 @@ def consultar_cerebro_ia(prompt_contexto):
         "parameters": {"max_new_tokens": 100, "temperature": 0.3}
     }
     try:
-        # Timeout corto de 10 segundos para no congelar el flujo si Hugging Face está saturado
-        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=10)
+        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=12)
         if response.status_code == 200:
             resultado = response.json()
             if isinstance(resultado, list) and len(resultado) > 0:
-                data = resultado[0]
-                return data.get("generated_text", str(data)).strip()
+                return resultado[0].get("generated_text", str(resultado)).strip()
             return str(resultado)
         else:
             print(f"[CEREBRO] Proveedor principal en espera (Status: {response.status_code}). Intentando respaldo...", flush=True)
-            response_alt = requests.post(RESPALDO_URL, headers=headers, json=payload, timeout=10)
+            response_alt = requests.post(RESPALDO_URL, headers=headers, json=payload, timeout=12)
             if response_alt.status_code == 200:
                 resultado_alt = response_alt.json()
                 if isinstance(resultado_alt, list) and len(resultado_alt) > 0:
-                    return resultado_alt[0].get("generated_text", str(resultado_alt[0])).strip()
+                    return resultado_alt[0].get("generated_text", str(resultado_alt)).strip()
             return "Modo pasivo: Mantener estrategia de precios base de $5.00 USD."
     except Exception as e:
-        return f"Mantener configuración estable de $5.00 USD (Sistemas en espera)."
+        return f"Recomendación: Enfocar esfuerzos en la visibilidad orgánica mediante el README.md optimizado de GitHub."
 
 # =====================================================================
 # BUCLE AUTÓNOMO PRINCIPAL (EJECUCIÓN CADA 4 HORAS)
