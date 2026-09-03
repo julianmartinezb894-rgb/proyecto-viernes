@@ -32,6 +32,6 @@ Por eso diseñé VIERNES. Un backend automatizado en la nube optimizado para ali
 
 El servicio ya está live en el Marketplace global de RapidAPI con un plan de entrada ultra-accesible de $5.00 USD/mes para validación y pruebas de desarrollo.
 
-👉 Conéctate e intégralo en menos de 60 segundos aquí: https://bit.ly
+👉 Conéctate e intégralo en menos de 60 segundos aquí:https://bit.ly/4gyOf1e
 
 #AI #WebScraping #ArtificialIntelligence #SoftwareDevelopment #API #B2B #GenerativeAI #LangChain
