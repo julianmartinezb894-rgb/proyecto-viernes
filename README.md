@@ -12,7 +12,7 @@ Perfect for autonomous agent loops (CrewAI, LangChain, AutoGPT) and background w
 ## ⚡ Production Access (Connect Now)
 This service is live and fully managed on RapidAPI. You can subscribe and integrate it into your code in less than 60 seconds:
 
-👉 [SUBSCRIBE ON RAPIDAPI MARKETPLACE HERE](https://rapidapi.com) *(Reemplaza esto con tu link real exacto de RapidAPI)*
+👉 [SUBSCRIBE ON RAPIDAPI MARKETPLACE HERE](https://rapidapi.com) https://bit.ly/4gyOf1e
 
 ## 🛠️ Usage Example
 ```bash
