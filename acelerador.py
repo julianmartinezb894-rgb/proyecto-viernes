@@ -51,8 +51,16 @@ if hasattr(app_original, 'scraping_alternativo'):
 else:
     print("[!] Advertencia: No se detectó 'scraping_alternativo' en app.py. Modo pasivo activo.")
 
+# =====================================================================
+# ACTIVACIÓN DEL ORQUESTADOR AUTÓNOMO (NÚCLEO) AL ARRANCAR EL SERVIDOR
+# =====================================================================
+try:
+    from nucleo_autonomo import iniciar_orquestador_en_segundo_plano
+    iniciar_orquestador_en_segundo_plano()
+except Exception as e:
+    print(f"[!] Error al encender el motor del Núcleo Autónomo: {e}")
+
 # 5. Cederle el control a la aplicación de Flask para que Render levante el servicio web
 if __name__ == "__main__":
     if hasattr(app_original, 'app'):
         app_original.app.run(host="0.0.0.0", port=10000)
-
