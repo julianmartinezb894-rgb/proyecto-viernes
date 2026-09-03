@@ -3,7 +3,7 @@
 # REGLA DE SEGURIDAD: Respeta al 100% la regla de congelación absoluta de archivos base.
 
 import sys
-from cache_viernes import obtener_datos_rapidos, guardar_datos_rapidos
+import threading  # Librería vital para ejecutar tareas en paralelo
 
 print("[ACELERADOR] Iniciando inyección dinámica de velocidad y salud en memoria...")
 
@@ -33,6 +33,7 @@ if hasattr(app_original, 'scraping_alternativo'):
     # 3. Diseñar la nueva ruta híbrida ultrarrápida
     def ruta_hibrida_acelerada(keyword, *args, **kwargs):
         # Intenta responder en milisegundos si los datos ya existen
+        from cache_viernes import obtener_datos_rapidos, guardar_datos_rapidos
         datos_en_cache = obtener_datos_rapidos(keyword)
         if datos_en_cache is not None:
             return datos_en_cache
@@ -52,11 +53,15 @@ else:
     print("[!] Advertencia: No se detectó 'scraping_alternativo' en app.py. Modo pasivo activo.")
 
 # =====================================================================
-# ACTIVACIÓN DEL ORQUESTADOR AUTÓNOMO (NÚCLEO) AL ARRANCAR EL SERVIDOR
+# ACTIVACIÓN SEGURA DEL ORQUESTADOR AUTÓNOMO (HILO SECUNDARIO ASÍNCRONO)
 # =====================================================================
 try:
-    from nucleo_autonomo import iniciar_orquestador_en_segundo_plano
-    iniciar_orquestador_en_segundo_plano()
+    from nucleo_autonomo import ejecutar_ciclo_agentico
+    
+    # Lanzamos el bucle en un hilo separado para que NO bloquee el arranque de Flask
+    hilo_viernes = threading.Thread(target=ejecutar_ciclo_agentico, daemon=True)
+    hilo_viernes.start()
+    print("[✓] Hilo asíncrono del Núcleo Autónomo desplegado correctamente.")
 except Exception as e:
     print(f"[!] Error al encender el motor del Núcleo Autónomo: {e}")
 
