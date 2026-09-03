@@ -19,3 +19,19 @@ This service is live and fully managed on RapidAPI. You can subscribe and integr
 curl --request GET \
 	--url 'https://onrender.com'
 ```
+🚀 Lanzamiento oficial: VIERNES - Ultra-Clean Data Extractor API para Agentes de IA
+
+Si estás construyendo flujos agénticos independientes (CrewAI, LangChain, AutoGPT) sabrás que el mayor cuello de botella es la extracción de datos en tiempo real: APIs corporativas costosas, rotación compleja de proxies y bloqueos constantes de Cloudflare.
+
+Por eso diseñé VIERNES. Un backend automatizado en la nube optimizado para alimentar el contexto de LLMs en milisegundos.
+
+💡 Características Clave:
+• Zero API Keys Required: Envía tu query y recibe la información estructurada.
+• Clean JSON Output: Datos limpios listos para inyectar en tus prompts.
+• Web3 Monetized: Infraestructura automatizada con suscripciones Web3 en la red Polygon.
+
+El servicio ya está live en el Marketplace global de RapidAPI con un plan de entrada ultra-accesible de $5.00 USD/mes para validación y pruebas de desarrollo.
+
+👉 Conéctate e intégralo en menos de 60 segundos aquí: https://bit.ly
+
+#AI #WebScraping #ArtificialIntelligence #SoftwareDevelopment #API #B2B #GenerativeAI #LangChain
