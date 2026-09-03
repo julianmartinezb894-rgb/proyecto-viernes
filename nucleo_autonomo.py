@@ -43,7 +43,7 @@ def consultar_cerebro_ia(prompt_contexto):
         "parameters": {"max_new_tokens": 150, "temperature": 0.3}
     }
     try:
-        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=10)
+        response = requests.post(HF_API_URL, headers=headers, json=payload, timeout=15)
         if response.status_code == 200:
             resultado = response.json()
             if isinstance(resultado, list) and len(resultado) > 0 and "generated_text" in resultado[0]:
@@ -51,20 +51,22 @@ def consultar_cerebro_ia(prompt_contexto):
             return str(resultado)
         else:
             print(f"[CEREBRO] Proveedor principal saturado (Status: {response.status_code}). Intentando enrutamiento de respaldo...")
-            # Enrutamiento de respaldo a modelo ligero alternativo en milisegundos (Costo $0)
-            response_alt = requests.post(RESPALDO_URL, headers=headers, json=payload, timeout=10)
+            response_alt = requests.post(RESPALDO_URL, headers=headers, json=payload, timeout=15)
             if response_alt.status_code == 200:
                 resultado_alt = response_alt.json()
                 if isinstance(resultado_alt, list) and len(resultado_alt) > 0 and "generated_text" in resultado_alt[0]:
                     return resultado_alt[0]["generated_text"].strip()
             return "Modo pasivo: Mantener estrategia de precios base de $5.00 USD."
     except Exception as e:
-        return f"Error de conexión en el cerebro: {e}. Manteniendo configuración stable."
+        return f"Error de conexión en el cerebro: {e}. Manteniendo configuración estable."
 
 # =====================================================================
 # BUCLE AUTÓNOMO PRINCIPAL (EJECUCIÓN CADA 4 HORAS)
 # =====================================================================
 def ejecutar_ciclo_agentico():
+    # Espera inicial corta de 10 segundos para asegurar que el puerto web de Render esté 100% listo
+    time.sleep(10)
+    
     while True:
         print("\n[VIERNES - NÚCLEO] Iniciando ciclo autónomo de control...")
         print("[VIERNES] Analizando balance agéntico de la wallet Polygon (Meta global: 27,230 USDT)...")
@@ -80,7 +82,7 @@ def ejecutar_ciclo_agentico():
         print("[VIERNES] Despertando el Cerebro Multi-Modelo para evaluación de mercado...")
         analisis_prompt = (
             "Estado actual: 0 suscriptores, Plan BASIC fijado en $5.00 USD, Plan PRO en $30.00 USD. "
-            "Infraestructura activa en Render. Genera una recomendación de 1 frase sobre si debemos mantener "
+            "Infraestructura activa en Render. Genera una recomendación de 1 frase en español sobre si debemos mantener "
             "los precios para bots o ajustar la estrategia de visibilidad en GitHub."
         )
         decision_ia = consultar_cerebro_ia(analisis_prompt)
@@ -90,7 +92,8 @@ def ejecutar_ciclo_agentico():
         print("[VIERNES] Comprobando hitos de dispersión de capital (Umbral: 1,361.50 USDT)...")
         print("[VIERNES] Optimizando visibilidad de endpoints comerciales...")
         
-        # Pausa estricta de 4 horas antes de iniciar el siguiente ciclo (14400 segundos)
+        # EL REPOSO SE EJECUTA AQUÍ (Al final del ciclo para no congelar el arranque)
+        print("[VIERNES] Ciclo completo. Entrando en reposo agéntico por 4 horas...")
         time.sleep(14400)
 
 def iniciar_orquestador_en_segundo_plano():
@@ -101,4 +104,3 @@ def iniciar_orquestador_en_segundo_plano():
 
 if __name__ == "__main__":
     ejecutar_ciclo_agentico()
-
