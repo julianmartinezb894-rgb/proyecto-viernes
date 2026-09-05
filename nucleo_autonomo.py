@@ -14,11 +14,11 @@ RAPIDAPI_HOST = "://rapidapi.com"
 
 def inyector_choque_latencia():
     """
-    Hilo de fuerza bruta comercial: Llama directamente al puerto 10000 de Flask
-    en el entorno local de Render para forzar registros ultra veloces.
+    Hilo de fuerza bruta comercial: Llama directamente a la URL pública de Render
+    para garantizar latencias reales y evitar errores de puertos internos.
     """
-    # URL interna apuntando al puerto exacto 10000 y al endpoint /buscar del contenedor
-    url = "http://127.0.0"
+    # Apuntamos directo a tu dominio público en producción
+    url = "https://onrender.com"
     
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -26,14 +26,14 @@ def inyector_choque_latencia():
     }
     params = {"q": "BTC USDT volume web3 data"}
 
-    print("[VIERNES - LATENCIA] Iniciando Hilo de Choque Estadístico Directo...", flush=True)
+    print("[VIERNES - LATENCIA] Iniciando Hilo de Choque Estadístico Público...", flush=True)
     
     while True:
         try:
             # Ráfaga de 3 llamadas consecutivas rápidas por ciclo para alterar la estadística
             for i in range(3):
                 inicio = time.time()
-                response = requests.get(url, headers=headers, params=params, timeout=5)
+                response = requests.get(url, headers=headers, params=params, timeout=10)
                 duracion = time.time() - inicio
                 
                 print(f"[VIERNES - TRÁFICO] Inyección {i+1}/3 - Status: {response.status_code} - Tiempo: {duracion:.2f}s", flush=True)
@@ -42,7 +42,7 @@ def inyector_choque_latencia():
             time.sleep(900) 
             
         except Exception as e:
-            print(f"[VIERNES - ERR] Falla en el hilo de tráfico directo: {e}. Reintentando...", flush=True)
+            print(f"[VIERNES - ERR] Falla en el hilo de tráfico externo: {e}. Reintentando...", flush=True)
             time.sleep(60)
 
 def bucle_supervivencia_financiera():
