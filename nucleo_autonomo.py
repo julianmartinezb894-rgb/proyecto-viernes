@@ -17,7 +17,7 @@ def inyector_choque_latencia():
     Hilo de fuerza bruta comercial: Llama directamente al puerto 10000 de Flask
     en el entorno local de Render para forzar registros ultra veloces.
     """
-    # URL interna apuntando al puerto exacto 10000 del contenedor
+    # URL interna apuntando al puerto exacto 10000 y al endpoint /buscar del contenedor
     url = "http://127.0.0"
     
     headers = {
