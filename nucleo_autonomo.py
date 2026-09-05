@@ -14,10 +14,10 @@ RAPIDAPI_HOST = "://rapidapi.com"
 
 def inyector_choque_latencia():
     """
-    Hilo de fuerza bruta comercial: Llama directamente al puerto interno de Render
-    para garantizar latencias menores a 1 segundo y evitar errores de DNS.
+    Hilo de fuerza bruta comercial: Llama directamente al puerto 10000 de Flask
+    en el entorno local de Render para forzar registros ultra veloces.
     """
-    # IP local directa del contenedor para evitar el formateo corrupto de URL externas
+    # URL interna apuntando al puerto exacto 10000 del contenedor
     url = "http://127.0.0"
     
     headers = {
