@@ -17,7 +17,9 @@ def inyector_choque_latencia():
     Hilo de fuerza bruta comercial: Ejecuta ráfagas controladas cada 15 minutos
     para diluir el promedio histórico de 32 segundos y forzar el indicador a sub-3s.
     """
-    url = f"https://{RAPIDAPI_HOST}/buscar"
+    # URL inyectada directamente en duro para evadir errores de formateo
+    url = "https://://rapidapi.com/buscar"
+    
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
         "X-RapidAPI-Host": RAPIDAPI_HOST
@@ -47,7 +49,7 @@ def bucle_supervivencia_financiera():
     """
     Hilo de lógica inteligente: Consulta saldo, evalúa costes y toma decisiones.
     """
-    print("[VIERNES - CEREBRO] Iniciando bucle de control financiero cada 4 horas...", flush=True)
+    print("[VIERNES - CEREBRO] Iniciando bucle de control financiero cada 4 hours...", flush=True)
     while True:
         try:
             # 1. Simulación/Consulta de saldo Polygon
