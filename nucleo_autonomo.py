@@ -66,14 +66,21 @@ def bucle_supervivencia_financiera():
             print(f"[VIERNES - ERR] Falla en cerebro financiero: {e}", flush=True)
             time.sleep(300)
 
-# Lanzamiento paralelo de la infraestructura en segundo plano
-if __name__ == "__main__":
+def ejecutar_ciclo_agentico():
+    """
+    Punto de entrada maestro exigido por acelerador.py para iniciar el sistema.
+    Lanza los hilos en segundo plano de manera asíncrona.
+    """
+    print("[VIERNES - ENLACE] Puente de compatibilidad con acelerador.py enlazado con éxito.", flush=True)
+    
     t1 = threading.Thread(target=inyector_choque_latencia, daemon=True)
     t2 = threading.Thread(target=bucle_supervivencia_financiera, daemon=True)
     
     t1.start()
     t2.start()
-    
-    # Mantener el proceso padre vivo para Render
+
+# Ejecución nativa si se invoca directamente
+if __name__ == "__main__":
+    ejecutar_ciclo_agentico()
     while True:
         time.sleep(3600)
