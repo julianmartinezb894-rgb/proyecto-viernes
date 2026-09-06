@@ -5,7 +5,6 @@ import requests
 # CONFIGURACIÓN MAESTRA DE TRACCIÓN COMERCIAL
 # ==========================================
 # REGLA DE ORO: Sustituye el texto de abajo por el Token numérico largo que te dio @BotFather
-# Ejemplo: "123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
 TELEGRAM_TOKEN = "TU_TOKEN_REAL_DE_TELEGRAM_AQUÍ"
 
 # REGLA DE ORO: Clave oficial del Marketplace vinculada a tu cuenta de RapidAPI Studio
@@ -18,7 +17,7 @@ PARTE_1 = "hf_iJLQBdxOPP"
 PARTE_2 = "MrvPjKLAQCzLFudoVlzMPCqM"
 HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 
-# CORRECCIÓN: El endpoint correcto para modelos de texto en la API de inferencia de HF
+# ENDPOINT CORREGIDO: Ruta oficial de la API de inferencia para el modelo Mistral
 API_URL_MISTRAL = "https://huggingface.co"
 headers_hf = {"Authorization": f"Bearer {HF_TOKEN}"}
 
@@ -87,7 +86,7 @@ def ejecutar_ciclo_marketing():
         if response.status_code == 200:
             resultado = response.json()
             
-            # CORRECCIÓN DE SINTAXIS: Aseguramos la existencia de la variable 'texto_generado'
+            # Verificación de estructura segura para evitar caídas del script
             if isinstance(resultado, list) and len(resultado) > 0:
                 texto_generado = resultado[0].get("generated_text", "")
             elif isinstance(resultado, dict):
@@ -115,4 +114,3 @@ def ejecutar_ciclo_marketing():
 if __name__ == "__main__":
     # Ejecución de prueba inicial inmediata al arrancar el servidor
     ejecutar_ciclo_marketing()
-
