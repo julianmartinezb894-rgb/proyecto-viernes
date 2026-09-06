@@ -4,12 +4,12 @@ import time
 # ==========================================
 # CONFIGURACIÓN DE CHOQUE (PROXY COMERCIAL)
 # ==========================================
-RAPIDAPI_URL = "https://onrender.com"
+RAPIDAPI_URL = "https://proyecto-viernes.onrender.com/buscar"
 RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
 
 headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
-    "X-RapidAPI-Host": "://rapidapi.com",
+    "X-RapidAPI-Host": "viernes-data-extractor.p.rapidapi.com",
     "Content-Type": "application/json"
 }
 
