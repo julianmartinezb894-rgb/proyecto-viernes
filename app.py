@@ -2,59 +2,62 @@
 # VIERNES 2.0 — Motor de búsqueda y extracción
 
 import os
+import urllib.parse
+import time
 
 from flask import Flask, request, jsonify
 import requests
+from bs4 import BeautifulSoup
 
 
 app = Flask(__name__)
 
 
-def buscar_google(termino):
+def scraping_alternativo(termino):
     resultados = []
 
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    cx_id = os.environ.get("GOOGLE_CX_ID")
-
-    if not api_key or not cx_id:
-        print(
-            "[VIERNES - BÚSQUEDA] Faltan GOOGLE_API_KEY o GOOGLE_CX_ID",
-            flush=True
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
         )
-        return resultados
-
-    url = "https://www.googleapis.com/customsearch/v1"
-
-    parametros = {
-        "key": api_key,
-        "cx": cx_id,
-        "q": termino,
-        "num": 5
     }
+
+    termino_codificado = urllib.parse.quote_plus(termino)
+
+    # Buscador gratuito, sin API Key.
+    url_busqueda = (
+        f"https://lite.duckduckgo.com/lite/?q={termino_codificado}"
+    )
 
     try:
         respuesta = requests.get(
-            url,
-            params=parametros,
-            timeout=15
+            url_busqueda,
+            headers=headers,
+            timeout=30
         )
 
         respuesta.raise_for_status()
 
-        datos = respuesta.json()
+        soup = BeautifulSoup(respuesta.text, "html.parser")
 
-        for item in datos.get("items", []):
-            resultados.append({
-                "fuente": "VIERNES Engine (Google)",
-                "titulo": item.get("title", ""),
-                "url": item.get("link", ""),
-                "descripcion": item.get("snippet", "")
-            })
+        # Selector principal de resultados.
+        enlaces = soup.select("a.result-link")
 
         print(
-            f"[VIERNES - BÚSQUEDA] Resultados encontrados: {len(resultados)}",
+            f"[VIERNES - BÚSQUEDA] Enlaces encontrados: {len(enlaces)}",
             flush=True
         )
+
+        for enlace in enlaces[:5]:
+            url_limpia = enlace.get("href", "").strip()
+
+            if url_limpia:
+                resultados.append({
+                    "fuente": "VIERNES Engine (DDG)",
+                    "url": url_limpia
+                })
 
     except requests.RequestException as error:
         print(
@@ -71,6 +74,15 @@ def buscar_google(termino):
     return resultados
 
 
+@app.route("/")
+def inicio():
+    return jsonify({
+        "motor": "VIERNES Data Extractor",
+        "estado": "activo",
+        "mensaje": "Motor de búsqueda disponible"
+    })
+
+
 @app.route("/buscar", methods=["GET"])
 def buscar():
     termino = request.args.get("termino", "").strip()
@@ -80,7 +92,7 @@ def buscar():
             "error": "El parámetro 'termino' es obligatorio"
         }), 400
 
-    datos_extraidos = buscar_google(termino)
+    datos_extraidos = scraping_alternativo(termino)
 
     return jsonify({
         "motor": "VIERNES Data Extractor",
