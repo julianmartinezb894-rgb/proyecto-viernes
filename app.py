@@ -1,12 +1,7 @@
 # FILE: app.py
 # VIERNES 2.0 — Motor de búsqueda y extracción
-#
-# Corrección:
-# - URL válida de DuckDuckGo Lite.
-# - Extracción de resultados orgánicos.
-# - Mantiene la ruta /buscar.
-# - No modifica finanzas.py ni otros archivos.
 
+import os
 import urllib.parse
 
 from flask import Flask, request, jsonify
@@ -28,40 +23,53 @@ def scraping_alternativo(termino):
         )
     }
 
-    # URL correcta de DuckDuckGo Lite.
     termino_codificado = urllib.parse.quote_plus(termino)
+
+    # Endpoint de búsqueda HTML.
     url_busqueda = (
-        f"https://lite.duckduckgo.com/lite/?q={termino_codificado}"
+        f"https://html.duckduckgo.com/html/?q={termino_codificado}"
     )
 
     try:
         respuesta = requests.get(
             url_busqueda,
             headers=headers,
-            timeout=8
+            timeout=15
         )
 
         respuesta.raise_for_status()
 
         soup = BeautifulSoup(respuesta.text, "html.parser")
 
-        # DuckDuckGo Lite utiliza enlaces con la clase result-link.
-        enlaces = soup.select("a.result-link")
+        # Selector principal de resultados orgánicos.
+        enlaces = soup.select("a.result__a")
+
+        # Registro para comprobar qué está devolviendo DuckDuckGo.
+        print(
+            f"[VIERNES - BÚSQUEDA] Enlaces encontrados: {len(enlaces)}",
+            flush=True
+        )
 
         for enlace in enlaces[:5]:
             url_limpia = enlace.get("href", "").strip()
 
             if url_limpia:
                 resultados.append({
-                    "fuente": "VIERNES Engine (DDG Lite)",
+                    "fuente": "VIERNES Engine (DDG)",
                     "url": url_limpia
                 })
 
     except requests.RequestException as error:
-        print(f"Error de conexión con DuckDuckGo: {error}")
+        print(
+            f"[VIERNES - BÚSQUEDA] Error de conexión: {error}",
+            flush=True
+        )
 
     except Exception as error:
-        print(f"Error en el motor de scraping: {error}")
+        print(
+            f"[VIERNES - BÚSQUEDA] Error de extracción: {error}",
+            flush=True
+        )
 
     return resultados
 
@@ -85,7 +93,9 @@ def buscar():
 
 
 if __name__ == "__main__":
+    puerto = int(os.environ.get("PORT", 10000))
+
     app.run(
         host="0.0.0.0",
-        port=10000
+        port=puerto
     )
