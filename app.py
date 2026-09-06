@@ -3,7 +3,6 @@
 
 import os
 import urllib.parse
-import time
 
 from flask import Flask, request, jsonify
 import requests
@@ -13,8 +12,13 @@ from bs4 import BeautifulSoup
 app = Flask(__name__)
 
 
-def scraping_alternativo(termino):
-    resultados = []
+def buscar_duckduckgo(termino, endpoint, selector):
+    """Busca en DuckDuckGo y devuelve los enlaces encontrados."""
+    termino_codificado = urllib.parse.quote_plus(termino)
+
+    url_busqueda = (
+        f"{endpoint}?q={termino_codificado}"
+    )
 
     headers = {
         "User-Agent": (
@@ -24,52 +28,74 @@ def scraping_alternativo(termino):
         )
     }
 
-    termino_codificado = urllib.parse.quote_plus(termino)
-
-    # Buscador gratuito, sin API Key.
-    url_busqueda = (
-        f"https://lite.duckduckgo.com/lite/?q={termino_codificado}"
+    respuesta = requests.get(
+        url_busqueda,
+        headers=headers,
+        timeout=30
     )
 
+    respuesta.raise_for_status()
+
+    soup = BeautifulSoup(respuesta.text, "html.parser")
+
+    enlaces = soup.select(selector)
+
+    resultados = []
+
+    for enlace in enlaces[:5]:
+        url_limpia = enlace.get("href", "").strip()
+
+        if url_limpia:
+            resultados.append({
+                "fuente": "VIERNES Engine (DDG)",
+                "url": url_limpia
+            })
+
+    return resultados
+
+
+def scraping_alternativo(termino):
+    """Busca usando dos formatos gratuitos de DuckDuckGo."""
+    resultados = []
+
+    # Primera ruta: DuckDuckGo HTML.
     try:
-        respuesta = requests.get(
-            url_busqueda,
-            headers=headers,
-            timeout=30
+        resultados = buscar_duckduckgo(
+            termino,
+            "https://html.duckduckgo.com/html/",
+            "a.result__a"
         )
-
-        respuesta.raise_for_status()
-
-        soup = BeautifulSoup(respuesta.text, "html.parser")
-
-        # Selector principal de resultados.
-        enlaces = soup.select("a.result-link")
 
         print(
-            f"[VIERNES - BÚSQUEDA] Enlaces encontrados: {len(enlaces)}",
+            f"[VIERNES - BÚSQUEDA] HTML: {len(resultados)} resultados",
             flush=True
         )
-
-        for enlace in enlaces[:5]:
-            url_limpia = enlace.get("href", "").strip()
-
-            if url_limpia:
-                resultados.append({
-                    "fuente": "VIERNES Engine (DDG)",
-                    "url": url_limpia
-                })
 
     except requests.RequestException as error:
         print(
-            f"[VIERNES - BÚSQUEDA] Error de conexión: {error}",
+            f"[VIERNES - BÚSQUEDA] HTML no disponible: {error}",
             flush=True
         )
 
-    except Exception as error:
-        print(
-            f"[VIERNES - BÚSQUEDA] Error de extracción: {error}",
-            flush=True
-        )
+    # Segunda ruta: DuckDuckGo Lite.
+    if not resultados:
+        try:
+            resultados = buscar_duckduckgo(
+                termino,
+                "https://lite.duckduckgo.com/lite/",
+                "a.result-link"
+            )
+
+            print(
+                f"[VIERNES - BÚSQUEDA] LITE: {len(resultados)} resultados",
+                flush=True
+            )
+
+        except requests.RequestException as error:
+            print(
+                f"[VIERNES - BÚSQUEDA] LITE no disponible: {error}",
+                flush=True
+            )
 
     return resultados
 
