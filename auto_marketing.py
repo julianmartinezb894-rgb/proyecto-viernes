@@ -5,7 +5,7 @@ import requests
 # CONFIGURACIÓN MAESTRA DE TRACCIÓN COMERCIAL
 # ==========================================
 # Token seguro y verificado de tu bot de Telegram
-TELEGRAM_TOKEN = "8799137608:AAE_fFu2EWuwLtFtB6T18ZZaXzeFHKqsYTg"
+TELEGRAM_TOKEN = "8799137608:AAFkylvGacvFbYD8_lBGOzfp4ETrBS3YcR8"
 
 # Clave oficial del Marketplace vinculada a tu cuenta de RapidAPI Studio
 RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
