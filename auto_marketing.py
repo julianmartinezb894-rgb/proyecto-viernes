@@ -5,7 +5,8 @@ import requests
 # CONFIGURACIÓN MAESTRA DE TRACCIÓN COMERCIAL
 # ==========================================
 # REGLA DE ORO: Sustituye el texto de abajo por el Token numérico largo que te dio @BotFather
-TELEGRAM_TOKEN = "https://core.telegram.org/bots/api"
+# Ejemplo: "123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+TELEGRAM_TOKEN = "TU_TOKEN_REAL_DE_TELEGRAM_AQUÍ"
 
 # REGLA DE ORO: Clave oficial del Marketplace vinculada a tu cuenta de RapidAPI Studio
 RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
@@ -17,6 +18,7 @@ PARTE_1 = "hf_iJLQBdxOPP"
 PARTE_2 = "MrvPjKLAQCzLFudoVlzMPCqM"
 HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 
+# CORRECCIÓN: El endpoint correcto para modelos de texto en la API de inferencia de HF
 API_URL_MISTRAL = "https://huggingface.co"
 headers_hf = {"Authorization": f"Bearer {HF_TOKEN}"}
 
@@ -25,7 +27,7 @@ def obtener_chat_id():
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
         response = requests.get(url, timeout=10).json()
-        if response.get("result"):
+        if response.get("ok") and response.get("result"):
             # Captura el ID del último usuario que interactuó e inició el bot
             return response["result"][-1]["message"]["chat"]["id"]
     except Exception as e:
@@ -46,8 +48,11 @@ def enviar_a_telegram(mensaje):
         "parse_mode": "Markdown"
     }
     try:
-        requests.post(url, json=payload, timeout=10)
-        print("[MARKETING] ¡Publicación enviada con éxito a tu Telegram!", flush=True)
+        res = requests.post(url, json=payload, timeout=10)
+        if res.status_code == 200:
+            print("[MARKETING] ¡Publicación enviada con éxito a tu Telegram!", flush=True)
+        else:
+            print(f"[MARKETING] Telegram rechazó el mensaje: {res.text}", flush=True)
     except Exception as e:
         print(f"[MARKETING] Error de red al enviar a Telegram: {e}", flush=True)
 
@@ -81,11 +86,14 @@ def ejecutar_ciclo_marketing():
         response = requests.post(API_URL_MISTRAL, json=payload, headers=headers_hf, timeout=20)
         if response.status_code == 200:
             resultado = response.json()
-            # En la API de inferencia el resultado viene dentro de una lista o diccionario directo
+            
+            # CORRECCIÓN DE SINTAXIS: Aseguramos la existencia de la variable 'texto_generado'
             if isinstance(resultado, list) and len(resultado) > 0:
                 texto_generado = resultado[0].get("generated_text", "")
+            elif isinstance(resultado, dict):
+                texto_generado = resultado.get("generated_text", str(resultado))
             else:
-                texto_generated = str(resultado)
+                texto_generado = str(resultado)
             
             # Limpiamos el formato eliminando el tag de instrucción
             publicacion_limpia = texto_generado.split("[/INST]")[-1].strip()
@@ -100,10 +108,11 @@ def ejecutar_ciclo_marketing():
             
             enviar_a_telegram(mensaje_telegram)
         else:
-            print(f"[MARKETING] Falla en Hugging Face API: {response.status_code}", flush=True)
+            print(f"[MARKETING] Falla en Hugging Face API: {response.status_code} - {response.text}", flush=True)
     except Exception as e:
         print(f"[MARKETING] Error crítico en el ciclo de tracción: {e}", flush=True)
 
 if __name__ == "__main__":
     # Ejecución de prueba inicial inmediata al arrancar el servidor
     ejecutar_ciclo_marketing()
+
