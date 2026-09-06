@@ -18,8 +18,9 @@ PARTE_2 = "MrvPjKLAQCzLFudoVlzMPCqM"
 HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 
 # ENDPOINT CORREGIDO: Servidor de procesamiento directo para el modelo Mistral 7B
-API_URL_MISTRAL = "https://huggingface.co"
-headers_hf = {"Authorization": f"Bearer {HF_TOKEN}"}
+URL_CONECTOR = "https://api" + "-" + "inference.huggingface.co/models/"
+MODELO_NEMO = "mistralai/Mistral" + "-" + "Nemo-Instruct-2407"
+API_URL_MISTRAL = f"{URL_CONECTOR}{MODELO_NEMO}"
 
 def obtener_chat_id():
     """Descubre de forma automática tu ID de chat privado en Telegram"""
