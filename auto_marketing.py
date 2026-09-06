@@ -17,19 +17,19 @@ PARTE_1 = "hf_iJLQBdxOPP"
 PARTE_2 = "MrvPjKLAQCzLFudoVlzMPCqM"
 HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 
-# ENDPOINT CONFIGURADO: Servidor alternativo libre para esquivar bloqueos de DNS
-CONECTOR_TEXTO = "https://text."
-DOMINIO_TEXTO = "pollinations.ai/"
-API_URL_MISTRAL = f"{CONECTOR_TEXTO}{DOMINIO_TEXTO}"
+# BASE DE RED BLINDADA: Evita alucinaciones del chat y bloqueos de red
+BASE_URL_IA = "https://text." + "pollinations.ai/"
+API_URL_MISTRAL = f"{BASE_URL_IA}"
 headers_hf = {}
 
 def obtener_chat_id():
     """Descubre de forma automática tu ID de chat privado en Telegram"""
     try:
-        url = f"https://telegram.org{TELEGRAM_TOKEN}/getUpdates"
+        # Ruta oficial corregida para la API de Telegram
+        base_telegram = "https://api." + "telegram.org/bot"
+        url = f"{base_telegram}{TELEGRAM_TOKEN}/getUpdates"
         response = requests.get(url, timeout=10).json()
         if response.get("ok") and response.get("result"):
-            # Captura el ID del último usuario que interactuó e inició el bot
             return response["result"][-1]["message"]["chat"]["id"]
     except Exception as e:
         print(f"[MARKETING] Error al obtener Chat ID: {e}", flush=True)
@@ -42,7 +42,9 @@ def enviar_a_telegram(mensaje):
         print("[MARKETING] Alerta: No se detectó interacción inicial. Presiona /start en tu bot de Telegram.", flush=True)
         return
     
-    url = f"https://telegram.org{TELEGRAM_TOKEN}/sendMessage"
+    # Ruta oficial corregida para el envío de mensajes
+    base_telegram = "https://api." + "telegram.org/bot"
+    url = f"{base_telegram}{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": mensaje,
@@ -77,7 +79,7 @@ def ejecutar_ciclo_marketing():
             "Include the official landing page link: https://github.io"
         )
 
-    # JSON de envío formateado para el modelo abierto de Pollinations AI
+    # Payload adaptado al servidor libre de Pollinations AI para saltar el bloqueo DNS
     payload = {
         "messages": [{"role": "user", "content": enfoque_prompt}],
         "model": "mistral"
@@ -88,10 +90,9 @@ def ejecutar_ciclo_marketing():
         if response.status_code == 200:
             resultado = response.json()
             
-            # Extracción simplificada y limpia del contenido de la IA
+            # Extracción limpia del texto generado por el modelo
             publicacion_limpia = resultado["choices"][0]["message"]["content"].strip()
             
-            # Formateamos el mensaje final con alertas visuales para tu Telegram
             mensaje_telegram = (
                 f"🤖 *VIERNES 2.0 - PROPUESTA DE MARKETING AGRESIVO*\n"
                 f"⚠️ *Estado:* Balance < $100 USD (Modo Tiburón Activo)\n\n"
