@@ -1,12 +1,9 @@
 import requests
 import time
 
-# CONFIGURACIÓN CRÍTICA COMERCIAL
-# Tu endpoint real en el proxy de RapidAPI
-RAPIDAPI_URL = "https://rapidapi.com" 
-
-# REGLA DE ORO: Reemplaza esto con tu clave "X-RapidAPI-Key" real de RapidAPI Studio
-RAPIDAPI_KEY = "TU_X_RAPIDAPI_KEY_AQUÍ" 
+# CONFIGURACIÓN MAESTRA DE LA OFENSIVA
+RAPIDAPI_URL = "https://rapidapi.com"
+RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
 
 headers = {
     "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -15,13 +12,13 @@ headers = {
 }
 
 payload = {
-    "query": "solana whale movements 2026"  # Simulación de consulta de un bot cliente
+    "query": "solana whale movements 2026"
 }
 
-def forzar_dilucion_latencia():
-    print("[VIERNES - OFENSIVA] Iniciando ráfaga de choque a través del Proxy de RapidAPI...", flush=True)
+def ejecutar_choque_latencia():
+    print("[VIERNES - PROXY OVERRIDE] Iniciando ráfaga de choque en el Proxy comercial...", flush=True)
     
-    # Forzamos 5 llamadas consecutivas a través de RapidAPI para alterar el algoritmo
+    # Lanzamos 5 peticiones rápidas consecutivas para forzar al Analytics de RapidAPI
     for i in range(1, 6):
         try:
             inicio = time.time()
@@ -29,14 +26,14 @@ def forzar_dilucion_latencia():
             latencia_real = time.time() - inicio
             
             if response.status_code == 200:
-                print(f" -> Inyección {i}/5 exitosa por Proxy | Latencia: {latencia_real:.2f}s | Status: 200", flush=True)
+                print(f" -> [ÉXITO] Inyección {i}/5 registrada por Proxy | Latencia: {latencia_real:.2f}s | Status: 200 OK", flush=True)
             else:
-                print(f" -> Alerta en Inyección {i}/5 | Código RapidAPI: {response.status_code}", flush=True)
+                print(f" -> [ALERTA] Inyección {i}/5 rechazada | Código Proxy: {response.status_code} | Respuesta: {response.text[:100]}", flush=True)
         
         except Exception as e:
-            print(f" -> Error de conexión en ráfaga {i}: {e}", flush=True)
+            print(f" -> [ERROR CRÍTICO] Falla de conexión en ráfaga {i}: {e}", flush=True)
         
-        time.sleep(2)  # Pausa técnica anti-bloqueo
+        time.sleep(2)  # Ventana técnica anti-spam
 
 if __name__ == "__main__":
-    forzar_dilucion_latencia()
+    ejecutar_choque_latencia()
