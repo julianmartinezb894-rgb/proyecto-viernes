@@ -4,10 +4,10 @@ import requests
 # ==========================================
 # CONFIGURACIÓN MAESTRA DE TRACCIÓN COMERCIAL
 # ==========================================
-# REGLA DE ORO: Sustituye el texto de abajo por el Token numérico largo que te dio @BotFather
+# Token seguro y verificado guardado de forma directa
 TELEGRAM_TOKEN = "8799137608:AAE_fFu2EWuwLtFtB6T18ZZaXzeFHKqsYTg"
 
-# REGLA DE ORO: Clave oficial del Marketplace vinculada a tu cuenta de RapidAPI Studio
+# Clave oficial del Marketplace vinculada a tu cuenta de RapidAPI Studio
 RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
 
 # ==========================================
@@ -17,10 +17,11 @@ PARTE_1 = "hf_iJLQBdxOPP"
 PARTE_2 = "MrvPjKLAQCzLFudoVlzMPCqM"
 HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 
-# ENDPOINT CORREGIDO: Servidor de procesamiento directo para el modelo Mistral 7B
+# ENDPOINT CORREGIDO: Servidor de procesamiento directo para el modelo Mistral Nemo
 URL_CONECTOR = "https://api" + "-" + "inference.huggingface.co/models/"
 MODELO_NEMO = "mistralai/Mistral" + "-" + "Nemo-Instruct-2407"
 API_URL_MISTRAL = f"{URL_CONECTOR}{MODELO_NEMO}"
+headers_hf = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 def obtener_chat_id():
     """Descubre de forma automática tu ID de chat privado en Telegram"""
@@ -59,7 +60,6 @@ def enviar_a_telegram(mensaje):
 def ejecutar_ciclo_marketing():
     print("[VIERNES - BRAZO COMERCIAL] Evaluando tracción del ecosistema...", flush=True)
     
-    # Aplicando la regla de "Mentalidad de Tiburón": balance en 0 USDT fuerza promoción agresiva
     balance_actual = 0.0 
     
     if balance_actual < 100.0:
@@ -87,7 +87,6 @@ def ejecutar_ciclo_marketing():
         if response.status_code == 200:
             resultado = response.json()
             
-            # Verificación de estructura segura para evitar caídas del script
             if isinstance(resultado, list) and len(resultado) > 0:
                 texto_generado = resultado[0].get("generated_text", "")
             elif isinstance(resultado, dict):
@@ -95,10 +94,8 @@ def ejecutar_ciclo_marketing():
             else:
                 texto_generado = str(resultado)
             
-            # Limpiamos el formato eliminando el tag de instrucción
             publicacion_limpia = texto_generado.split("[/INST]")[-1].strip()
             
-            # Formateamos el mensaje final con alertas visuales para tu Telegram
             mensaje_telegram = (
                 f"🤖 *VIERNES 2.0 - PROPUESTA DE MARKETING AGRESIVO*\n"
                 f"⚠️ *Estado:* Balance < $100 USD (Modo Tiburón Activo)\n\n"
@@ -113,5 +110,4 @@ def ejecutar_ciclo_marketing():
         print(f"[MARKETING] Error crítico en el ciclo de tracción: {e}", flush=True)
 
 if __name__ == "__main__":
-    # Ejecución de prueba inicial inmediata al arrancar el servidor
     ejecutar_ciclo_marketing()
