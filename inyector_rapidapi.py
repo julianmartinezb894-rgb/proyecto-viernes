@@ -1,8 +1,9 @@
 import requests
 import time
 
-# CONFIGURACIÓN MAESTRA DE LA OFENSIVA
-RAPIDAPI_URL = "https://rapidapi.com"
+# CONFIGURACIÓN CORREGIDA CON URL REAL DE RENDER
+# Forzamos la llamada al proxy apuntando al subdominio verificado por tus logs
+RAPIDAPI_URL = "https://onrender.com"
 RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
 
 headers = {
@@ -16,24 +17,24 @@ payload = {
 }
 
 def ejecutar_choque_latencia():
-    print("[VIERNES - PROXY OVERRIDE] Iniciando ráfaga de choque en el Proxy comercial...", flush=True)
+    print("[VIERNES - PROXY OVERRIDE] Probando conexión directa a la URL real de Render...", flush=True)
     
-    # Lanzamos 5 peticiones rápidas consecutivas para forzar al Analytics de RapidAPI
-    for i in range(1, 6):
+    for i in range(1, 4): # Reducido a 3 intentos para probar el puente
         try:
             inicio = time.time()
-            response = requests.post(RAPIDAPI_URL, json=payload, headers=headers, timeout=15)
+            # Probamos directo a Render primero para verificar que la ruta /buscar responde externamente
+            response = requests.post(RAPIDAPI_URL, json=payload, timeout=15)
             latencia_real = time.time() - inicio
             
             if response.status_code == 200:
-                print(f" -> [ÉXITO] Inyección {i}/5 registrada por Proxy | Latencia: {latencia_real:.2f}s | Status: 200 OK", flush=True)
+                print(f" -> [ÉXITO EN RENDER] Inyección {i}/3 directa | Latencia: {latencia_real:.2f}s | Status: 200 OK", flush=True)
             else:
-                print(f" -> [ALERTA] Inyección {i}/5 rechazada | Código Proxy: {response.status_code} | Respuesta: {response.text[:100]}", flush=True)
+                print(f" -> [ALERTA RENDER] Código: {response.status_code} | Respuesta: {response.text[:100]}", flush=True)
         
         except Exception as e:
-            print(f" -> [ERROR CRÍTICO] Falla de conexión en ráfaga {i}: {e}", flush=True)
+            print(f" -> [ERROR CRÍTICO] Falla de conexión: {e}", flush=True)
         
-        time.sleep(2)  # Ventana técnica anti-spam
+        time.sleep(2)
 
 if __name__ == "__main__":
     ejecutar_choque_latencia()
