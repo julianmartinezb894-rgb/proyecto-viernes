@@ -20,7 +20,7 @@ HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 # ENDPOINT CORREGIDO: Servidor de procesamiento directo para el modelo Mistral Nemo
 URL_CONECTOR = "https://api" + "-" + "inference.huggingface.co/models/"
 MODELO_NEMO = "mistralai/Mistral" + "-" + "Nemo-Instruct-2407"
-API_URL_MISTRAL = f"{URL_CONECTOR}{MODELO_NEMO}"
+API_URL_MISTRAL = f"https://api-inference.huggingface.co/models/mistralai/Mistral-Nemo-Instruct-2407"
 headers_hf = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 def obtener_chat_id():
