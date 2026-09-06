@@ -3,123 +3,71 @@
 
 import os
 import urllib.parse
+import xml.etree.ElementTree as ET
 
 from flask import Flask, request, jsonify
 import requests
-from bs4 import BeautifulSoup
 
 
 app = Flask(__name__)
 
 
-def buscar_duckduckgo(termino):
-    """Busca resultados web sin API key."""
+def buscar_google_news(termino):
+    """Búsqueda gratuita mediante Google News RSS."""
     resultados = []
 
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
-
     url = (
-        "https://html.duckduckgo.com/html/?q="
+        "https://news.google.com/rss/search?q="
         + urllib.parse.quote_plus(termino)
+        + "&hl=en-US&gl=US&ceid=US:en"
     )
+
+    headers = {
+        "User-Agent": "VIERNES-Engine/1.0"
+    }
 
     try:
         respuesta = requests.get(
             url,
             headers=headers,
-            timeout=15
+            timeout=20
         )
 
         respuesta.raise_for_status()
 
-        soup = BeautifulSoup(respuesta.text, "html.parser")
+        raiz = ET.fromstring(respuesta.content)
 
-        for enlace in soup.select("a.result__a")[:5]:
-            titulo = enlace.get_text(" ", strip=True)
-            url_resultado = enlace.get("href", "").strip()
+        for item in raiz.findall(".//item")[:5]:
+            titulo = item.findtext("title", "").strip()
+            enlace = item.findtext("link", "").strip()
 
-            if titulo and url_resultado:
+            if titulo and enlace:
                 resultados.append({
-                    "fuente": "VIERNES Engine (DDG)",
+                    "fuente": "VIERNES Engine (Google News)",
                     "titulo": titulo,
-                    "url": url_resultado
+                    "url": enlace
                 })
 
         print(
-            f"[VIERNES - DDG] Resultados: {len(resultados)}",
+            f"[VIERNES - BÚSQUEDA] Resultados: {len(resultados)}",
             flush=True
         )
 
     except requests.RequestException as error:
         print(
-            f"[VIERNES - DDG] Error: {error}",
+            f"[VIERNES - BÚSQUEDA] Error de conexión: {error}",
             flush=True
         )
 
-    return resultados
-
-
-def buscar_wikipedia(termino):
-    """Respaldo gratuito cuando DuckDuckGo no responde."""
-    resultados = []
-
-    url = "https://en.wikipedia.org/w/api.php"
-
-    parametros = {
-        "action": "query",
-        "list": "search",
-        "srsearch": termino,
-        "format": "json",
-        "utf8": 1,
-        "srlimit": 5
-    }
-
-    try:
-        respuesta = requests.get(
-            url,
-            params=parametros,
-            timeout=15
-        )
-
-        respuesta.raise_for_status()
-
-        datos = respuesta.json()
-
-        for resultado in datos.get("query", {}).get("search", []):
-            titulo = resultado.get("title", "").strip()
-
-            if titulo:
-                resultados.append({
-                    "fuente": "VIERNES Engine (Wikipedia)",
-                    "titulo": titulo,
-                    "url": (
-                        "https://en.wikipedia.org/wiki/"
-                        + urllib.parse.quote(
-                            titulo.replace(" ", "_")
-                        )
-                    )
-                })
-
+    except ET.ParseError as error:
         print(
-            f"[VIERNES - WIKIPEDIA] Resultados: {len(resultados)}",
-            flush=True
-        )
-
-    except requests.RequestException as error:
-        print(
-            f"[VIERNES - WIKIPEDIA] Error: {error}",
+            f"[VIERNES - BÚSQUEDA] Error de XML: {error}",
             flush=True
         )
 
     except Exception as error:
         print(
-            f"[VIERNES - WIKIPEDIA] Error de extracción: {error}",
+            f"[VIERNES - BÚSQUEDA] Error de extracción: {error}",
             flush=True
         )
 
@@ -127,19 +75,7 @@ def buscar_wikipedia(termino):
 
 
 def scraping_alternativo(termino):
-    """Motor principal con respaldo gratuito."""
-    resultados = buscar_duckduckgo(termino)
-
-    if not resultados:
-        print(
-            "[VIERNES - BÚSQUEDA] DDG sin resultados. "
-            "Activando respaldo Wikipedia.",
-            flush=True
-        )
-
-        resultados = buscar_wikipedia(termino)
-
-    return resultados
+    return buscar_google_news(termino)
 
 
 @app.route("/", methods=["GET"])
