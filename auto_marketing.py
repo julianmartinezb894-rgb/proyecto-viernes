@@ -68,7 +68,7 @@ def ejecutar_ciclo_marketing():
             "Act as an aggressive B2B Growth Agent. Generate an ultra-compelling, high-impact hook "
             "for Twitter/Reddit targeting Web3 developers and LLM engineers. Convince them why they desperately "
             "need real-time crypto context data for their AI agents to prevent bad trades. Be sharp, corporate, and persuasive. "
-            "Include the official landing page link exactly: https://github.io"
+            "Include the official landing page link exactly: https://bit.ly/4wY89HF
         )
     else:
         print("[MODO COCHÓN] Balance seguro. Generando contenido educativo pasivo.", flush=True)
