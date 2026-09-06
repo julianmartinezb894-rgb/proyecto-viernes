@@ -5,7 +5,7 @@ import requests
 # CONFIGURACIÓN MAESTRA DE TRACCIÓN COMERCIAL
 # ==========================================
 # REGLA DE ORO: Sustituye el texto de abajo por el Token numérico largo que te dio @BotFather
-TELEGRAM_TOKEN = "8799137608:AAG4kozYSMxnCWiss8nUvlIpwwCoLOxyaR4"
+TELEGRAM_TOKEN = "8799137608:AAE_fFu2EWuwLtFtB6T18ZZaXzeFHKqsYTg"
 
 # REGLA DE ORO: Clave oficial del Marketplace vinculada a tu cuenta de RapidAPI Studio
 RAPIDAPI_KEY = "dd078346f3msh540ad124bed2d53p1a38d5jsndb258aa9240c"
