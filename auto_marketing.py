@@ -17,7 +17,7 @@ PARTE_1 = "hf_iJLQBdxOPP"
 PARTE_2 = "MrvPjKLAQCzLFudoVlzMPCqM"
 HF_TOKEN = f"{PARTE_1}{PARTE_2}"
 
-# ENDPOINT CORREGIDO: Ruta oficial de la API de inferencia para el modelo Mistral
+# ENDPOINT CORREGIDO: Servidor de procesamiento directo para el modelo Mistral 7B
 API_URL_MISTRAL = "https://huggingface.co"
 headers_hf = {"Authorization": f"Bearer {HF_TOKEN}"}
 
