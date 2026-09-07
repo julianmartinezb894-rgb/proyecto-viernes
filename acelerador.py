@@ -1,71 +1,204 @@
 # FILE: acelerador.py
-# OBJETIVO: Enlazar el caché de forma dinámica e inyectar la ruta de salud sin modificar app.py
-# REGLA DE SEGURIDAD: Respeta al 100% la regla de congelación absoluta de archivos base.
+# VIERNES 2.0 — Arrancador principal de Render
+#
+# Funciones:
+# 1. Carga app.py sin modificarlo.
+# 2. Inyecta la ruta /despertar.
+# 3. Sustituye el motor de búsqueda por buscador_web.py.
+# 4. Mantiene el proceso Flask activo.
+#
+# IMPORTANTE:
+# No se ejecuta auto_marketing.py desde aquí.
 
 import sys
-import threading  # Librería vital para ejecutar tareas en paralelo
+import threading
+import os
 
-print("[ACELERADOR] Iniciando inyección dinámica de velocidad y salud en memoria...")
+print(
+    "[ACELERADOR] Iniciando inyección dinámica de VIERNES...",
+    flush=True
+)
 
-# 1. Forzar la carga inicial de tu aplicación web congelada
+# ============================================================
+# 1. CARGAR APLICACIÓN BASE
+# ============================================================
+
 try:
     import app as app_original
-except Exception as e:
-    print(f"[!] Error al precargar app.py: {e}")
+except Exception as error:
+    print(
+        f"[ACELERADOR] Error al cargar app.py: {error}",
+        flush=True
+    )
     sys.exit(1)
 
-# =====================================================================
-# NUEVA INYECCIÓN: RUTA DE SALUD EN RAM PARA EVITAR COLD START (CRON-JOB)
-# =====================================================================
-if hasattr(app_original, 'app'):
-    @app_original.app.route('/despertar', methods=['GET'])
+if not hasattr(app_original, "app"):
+    print(
+        "[ACELERADOR] ERROR CRÍTICO: app.py no contiene 'app'.",
+        flush=True
+    )
+    sys.exit(1)
+
+flask_app = app_original.app
+
+print(
+    "[ACELERADOR] app.py cargado correctamente.",
+    flush=True
+)
+
+# ============================================================
+# 2. RUTA DE SALUD
+# ============================================================
+
+if not any(
+    regla.rule == "/despertar"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route("/despertar", methods=["GET", "HEAD"])
     def despertar_sistema():
-        """Ruta limpia para responder al ping externo sin activar el scraper."""
-        return {"status": "online", "message": "VIERNES activo y operativo"}, 200
-    print("[✓] Inyección de ruta /despertar completada con éxito.")
+        return {
+            "status": "online",
+            "message": "VIERNES activo y operativo"
+        }, 200
+
+    print(
+        "[ACELERADOR] Ruta /despertar inyectada.",
+        flush=True
+    )
 else:
-    print("[!] Error crítico: No se encontró la instancia de Flask 'app' en app.py.")
+    print(
+        "[ACELERADOR] Ruta /despertar ya existe.",
+        flush=True
+    )
 
-# 2. Resguardar la función original del scraper lento de 36 segundos
-if hasattr(app_original, 'scraping_alternativo'):
-    funcion_lenta_original = app_original.scraping_alternativo
-    
-    # 3. Diseñar la nueva ruta híbrida ultrarrápida
-    def ruta_hibrida_acelerada(keyword, *args, **kwargs):
-        # Intenta responder en milisegundos si los datos ya existen
-        from cache_viernes import obtener_datos_rapidos, guardar_datos_rapidos
-        datos_en_cache = obtener_datos_rapidos(keyword)
-        if datos_en_cache is not None:
-            return datos_en_cache
-            
-        # Si no existen, ejecuta el scraper lento una sola vez
-        print(f"[ACELERADOR] Término nuevo '{keyword}'. Ejecutando extractor base...")
-        resultado_json = funcion_lenta_original(keyword, *args, **kwargs)
-        
-        # Guarda el resultado para que la siguiente llamada sea instantánea
-        guardar_datos_rapidos(keyword, resultado_json)
-        return resultado_json
+# ============================================================
+# 3. SUSTITUIR EL MOTOR DE BÚSQUEDA
+# ============================================================
 
-    # 4. Inyectar la velocidad directamente en la memoria del servidor de Flask
-    app_original.scraping_alternativo = ruta_hibrida_acelerada
-    print("[✓] Inyección de velocidad completada. El endpoint ahora corre sobre caché.")
-else:
-    print("[!] Advertencia: No se detectó 'scraping_alternativo' en app.py. Modo pasivo activo.")
-
-# =====================================================================
-# ACTIVACIÓN SEGURA DEL ORQUESTADOR AUTÓNOMO (HILO SECUNDARIO ASÍNCRONO)
-# =====================================================================
 try:
-    from nucleo_autonomo import ejecutar_ciclo_agentico
-    
-    # Lanzamos el bucle en un hilo separado para que NO bloquee el arranque de Flask
-    hilo_viernes = threading.Thread(target=ejecutar_ciclo_agentico, daemon=True)
-    hilo_viernes.start()
-    print("[✓] Hilo asíncrono del Núcleo Autónomo desplegado correctamente.")
-except Exception as e:
-    print(f"[!] Error al encender el motor del Núcleo Autónomo: {e}")
+    from buscador_web import buscar_web
 
-# 5. Cederle el control a la aplicación de Flask para que Render levante el servicio web
+    app_original.scraping_alternativo = buscar_web
+
+    print(
+        "[ACELERADOR] Motor web Tavily conectado correctamente.",
+        flush=True
+    )
+
+except Exception as error:
+    print(
+        f"[ACELERADOR] ERROR al conectar buscador_web.py: {error}",
+        flush=True
+    )
+    sys.exit(1)
+
+# ============================================================
+# 4. CACHE OPCIONAL
+# ============================================================
+
+try:
+    from cache_viernes import (
+        obtener_datos_rapidos,
+        guardar_datos_rapidos
+    )
+
+    buscador_web_original = app_original.scraping_alternativo
+
+    def busqueda_con_cache(termino, *args, **kwargs):
+        """
+        Primero intenta obtener el resultado desde memoria.
+        Si no existe, consulta Tavily y guarda la respuesta.
+        """
+
+        try:
+            datos_cache = obtener_datos_rapidos(termino)
+
+            if datos_cache is not None:
+                print(
+                    f"[ACELERADOR] Cache HIT: {termino}",
+                    flush=True
+                )
+                return datos_cache
+
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error leyendo cache: {error}",
+                flush=True
+            )
+
+        print(
+            f"[ACELERADOR] Cache MISS: {termino}. "
+            "Consultando web...",
+            flush=True
+        )
+
+        resultado = buscador_web_original(
+            termino,
+            *args,
+            **kwargs
+        )
+
+        try:
+            guardar_datos_rapidos(
+                termino,
+                resultado
+            )
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error guardando cache: {error}",
+                flush=True
+            )
+
+        return resultado
+
+    app_original.scraping_alternativo = busqueda_con_cache
+
+    print(
+        "[ACELERADOR] Sistema de cache conectado al motor web.",
+        flush=True
+    )
+
+except Exception as error:
+    print(
+        f"[ACELERADOR] Cache no disponible. "
+        f"Continuando sin cache: {error}",
+        flush=True
+    )
+
+# ============================================================
+# 5. PUERTO DE RENDER
+# ============================================================
+
+def obtener_puerto():
+    try:
+        return int(
+            os.environ.get("PORT", "10000")
+        )
+    except (TypeError, ValueError):
+        print(
+            "[ACELERADOR] PORT inválido. "
+            "Utilizando 10000.",
+            flush=True
+        )
+        return 10000
+
+
+# ============================================================
+# 6. ARRANQUE
+# ============================================================
+
 if __name__ == "__main__":
-    if hasattr(app_original, 'app'):
-        app_original.app.run(host="0.0.0.0", port=10000)
+
+    puerto = obtener_puerto()
+
+    print(
+        f"[ACELERADOR] VIERNES listo en puerto {puerto}.",
+        flush=True
+    )
+
+    flask_app.run(
+        host="0.0.0.0",
+        port=puerto,
+        debug=False,
+        threaded=True
+    )
