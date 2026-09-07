@@ -1,47 +1,71 @@
 # FILE: acelerador.py
-# VIERNES 2.0 — Arrancador principal de Render
-#
-# OBJETIVO:
-# 1. Importar la aplicación Flask desde app.py.
-# 2. Mantener el proceso principal vivo.
-# 3. Utilizar el puerto proporcionado por Render.
-# 4. NO ejecutar todavía el sistema de marketing.
-#
-# NOTA:
-# El marketing se volverá a conectar después de confirmar que
-# el servidor permanece estable. No mezclamos ambos problemas.
+# OBJETIVO: Enlazar el caché de forma dinámica e inyectar la ruta de salud sin modificar app.py
+# REGLA DE SEGURIDAD: Respeta al 100% la regla de congelación absoluta de archivos base.
 
-import os
-from app import app
+import sys
+import threading  # Librería vital para ejecutar tareas en paralelo
 
+print("[ACELERADOR] Iniciando inyección dinámica de velocidad y salud en memoria...")
 
-def obtener_puerto():
-    """Obtiene el puerto asignado por Render."""
-    try:
-        return int(os.environ.get("PORT", "10000"))
-    except (TypeError, ValueError):
-        print(
-            "[VIERNES] PORT inválido. Utilizando puerto 10000.",
-            flush=True
-        )
-        return 10000
+# 1. Forzar la carga inicial de tu aplicación web congelada
+try:
+    import app as app_original
+except Exception as e:
+    print(f"[!] Error al precargar app.py: {e}")
+    sys.exit(1)
 
+# =====================================================================
+# NUEVA INYECCIÓN: RUTA DE SALUD EN RAM PARA EVITAR COLD START (CRON-JOB)
+# =====================================================================
+if hasattr(app_original, 'app'):
+    @app_original.app.route('/despertar', methods=['GET'])
+    def despertar_sistema():
+        """Ruta limpia para responder al ping externo sin activar el scraper."""
+        return {"status": "online", "message": "VIERNES activo y operativo"}, 200
+    print("[✓] Inyección de ruta /despertar completada con éxito.")
+else:
+    print("[!] Error crítico: No se encontró la instancia de Flask 'app' en app.py.")
 
-def iniciar_servidor():
-    """Inicia el servidor Flask de VIERNES."""
-    puerto = obtener_puerto()
+# 2. Resguardar la función original del scraper lento de 36 segundos
+if hasattr(app_original, 'scraping_alternativo'):
+    funcion_lenta_original = app_original.scraping_alternativo
+    
+    # 3. Diseñar la nueva ruta híbrida ultrarrápida
+    def ruta_hibrida_acelerada(keyword, *args, **kwargs):
+        # Intenta responder en milisegundos si los datos ya existen
+        from cache_viernes import obtener_datos_rapidos, guardar_datos_rapidos
+        datos_en_cache = obtener_datos_rapidos(keyword)
+        if datos_en_cache is not None:
+            return datos_en_cache
+            
+        # Si no existen, ejecuta el scraper lento una sola vez
+        print(f"[ACELERADOR] Término nuevo '{keyword}'. Ejecutando extractor base...")
+        resultado_json = funcion_lenta_original(keyword, *args, **kwargs)
+        
+        # Guarda el resultado para que la siguiente llamada sea instantánea
+        guardar_datos_rapidos(keyword, resultado_json)
+        return resultado_json
 
-    print(
-        f"[VIERNES] Iniciando servidor en 0.0.0.0:{puerto}",
-        flush=True
-    )
+    # 4. Inyectar la velocidad directamente en la memoria del servidor de Flask
+    app_original.scraping_alternativo = ruta_hibrida_acelerada
+    print("[✓] Inyección de velocidad completada. El endpoint ahora corre sobre caché.")
+else:
+    print("[!] Advertencia: No se detectó 'scraping_alternativo' en app.py. Modo pasivo activo.")
 
-    app.run(
-        host="0.0.0.0",
-        port=puerto,
-        threaded=True
-    )
+# =====================================================================
+# ACTIVACIÓN SEGURA DEL ORQUESTADOR AUTÓNOMO (HILO SECUNDARIO ASÍNCRONO)
+# =====================================================================
+try:
+    from nucleo_autonomo import ejecutar_ciclo_agentico
+    
+    # Lanzamos el bucle en un hilo separado para que NO bloquee el arranque de Flask
+    hilo_viernes = threading.Thread(target=ejecutar_ciclo_agentico, daemon=True)
+    hilo_viernes.start()
+    print("[✓] Hilo asíncrono del Núcleo Autónomo desplegado correctamente.")
+except Exception as e:
+    print(f"[!] Error al encender el motor del Núcleo Autónomo: {e}")
 
-
+# 5. Cederle el control a la aplicación de Flask para que Render levante el servicio web
 if __name__ == "__main__":
-    iniciar_servidor()
+    if hasattr(app_original, 'app'):
+        app_original.app.run(host="0.0.0.0", port=10000)
