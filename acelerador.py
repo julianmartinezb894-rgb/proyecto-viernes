@@ -79,10 +79,6 @@ try:
             datos_cache = obtener_datos_rapidos(termino)
 
             if datos_cache is not None:
-                print(
-                    f"[ACELERADOR] Cache HIT: {termino}",
-                    flush=True
-                )
                 return datos_cache
 
         except Exception as error:
@@ -124,10 +120,12 @@ except Exception as error:
     )
 
 
-NICHO_INICIAL = "agencias de automatización"
+NICHO_INICIAL = "personas con demanda directa de extracción de datos"
 
-CONSULTA_INICIAL = (
-    "companies needing web scraping API data extraction automation"
+CONSULTAS_INICIALES = (
+    'site:reddit.com "need web scraping"',
+    'site:reddit.com "looking for a web scraper"',
+    'site:reddit.com "need data extraction"',
 )
 
 
@@ -195,20 +193,33 @@ if not any(
 
             conexion = abrir_base_datos()
 
+            resumen_total = {
+                "resultados_tavily": 0,
+                "leads_guardados": 0,
+                "duplicados": 0,
+                "cualificados": 0,
+            }
+
             try:
-                resumen = descubrir_leads(
-                    conexion,
-                    NICHO_INICIAL,
-                    CONSULTA_INICIAL
-                )
+                for consulta in CONSULTAS_INICIALES:
+                    resumen = descubrir_leads(
+                        conexion,
+                        NICHO_INICIAL,
+                        consulta
+                    )
+
+                    for clave in resumen_total:
+                        resumen_total[clave] += resumen[
+                            clave
+                        ]
             finally:
                 conexion.close()
 
             return jsonify({
                 "status": "ok",
                 "nicho": NICHO_INICIAL,
-                "consulta": CONSULTA_INICIAL,
-                "resultado": resumen
+                "consultas": CONSULTAS_INICIALES,
+                "resultado": resumen_total
             }), 200
 
         except Exception as error:
@@ -288,7 +299,10 @@ if not any(
             conexion = abrir_base_datos()
 
             try:
-                leads = obtener_leads(conexion, limite=20)
+                leads = obtener_leads(
+                    conexion,
+                    limite=20
+                )
             finally:
                 conexion.close()
 
