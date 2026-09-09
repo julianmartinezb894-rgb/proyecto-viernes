@@ -120,12 +120,11 @@ except Exception as error:
     )
 
 
-NICHO_INICIAL = "personas con demanda directa de extracción de datos"
+NICHO_INICIAL = "trabajos pagados de extracción de datos"
 
 CONSULTAS_INICIALES = (
-    'site:reddit.com "need web scraping"',
-    'site:reddit.com "looking for a web scraper"',
-    'site:reddit.com "need data extraction"',
+    'site:upwork.com/freelance-jobs/apply/ "web scraping" "Posted"',
+    'site:upwork.com/freelance-jobs/apply/ "data extraction" "Posted"',
 )
 
 
