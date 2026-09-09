@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -250,6 +251,77 @@ def abrir_base_datos():
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS objetivos_comerciales (
+                id BIGSERIAL PRIMARY KEY,
+                nombre TEXT NOT NULL UNIQUE,
+                servicio TEXT NOT NULL,
+                meta_ingresos_usd NUMERIC(12, 2) NOT NULL,
+                presupuesto_maximo_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                ingresos_confirmados_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                estado TEXT NOT NULL DEFAULT 'activo',
+                fecha_creacion TIMESTAMPTZ NOT NULL,
+                fecha_ultima_actualizacion TIMESTAMPTZ NOT NULL
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS estrategias_comerciales (
+                id BIGSERIAL PRIMARY KEY,
+                nombre TEXT NOT NULL UNIQUE,
+                canal TEXT NOT NULL,
+                intentos INTEGER NOT NULL DEFAULT 0,
+                aprobaciones INTEGER NOT NULL DEFAULT 0,
+                rechazos INTEGER NOT NULL DEFAULT 0,
+                respuestas INTEGER NOT NULL DEFAULT 0,
+                conversiones INTEGER NOT NULL DEFAULT 0,
+                ingresos_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                coste_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                puntuacion_estrategia NUMERIC(8, 2) NOT NULL DEFAULT 50,
+                estado TEXT NOT NULL DEFAULT 'activa',
+                fecha_ultima_actualizacion TIMESTAMPTZ NOT NULL
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS acciones_comerciales (
+                id BIGSERIAL PRIMARY KEY,
+                objetivo_id BIGINT NOT NULL REFERENCES objetivos_comerciales(id),
+                estrategia_id BIGINT NOT NULL REFERENCES estrategias_comerciales(id),
+                lead_id BIGINT NOT NULL REFERENCES leads(id),
+                tipo_accion TEXT NOT NULL,
+                estado TEXT NOT NULL DEFAULT 'pendiente_aprobacion',
+                prioridad NUMERIC(8, 2) NOT NULL,
+                razon_decision TEXT NOT NULL,
+                contenido TEXT NOT NULL,
+                valor_estimado_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                coste_estimado_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                resultado JSONB,
+                nota_humana TEXT,
+                fecha_creacion TIMESTAMPTZ NOT NULL,
+                fecha_decision TIMESTAMPTZ,
+                fecha_ejecucion TIMESTAMPTZ
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS
+                una_accion_abierta_por_lead
+            ON acciones_comerciales (lead_id)
+            WHERE estado IN (
+                'pendiente_aprobacion',
+                'aprobada_pendiente_ejecucion'
+            )
+            """
+        )
+
     conexion.commit()
 
     recalificar_leads_existentes(conexion)
@@ -448,4 +520,320 @@ def obtener_metricas(conexion):
             totales["ingresos_usd"]
         ),
         "por_estado": por_estado,
+    }
+
+
+def asegurar_objetivo_y_estrategia(conexion):
+    fecha = ahora()
+    meta = float(os.environ.get("VIERNES_META_INGRESOS_USD", "100"))
+    presupuesto = float(os.environ.get("VIERNES_PRESUPUESTO_MAXIMO_USD", "0"))
+
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO objetivos_comerciales (
+                nombre, servicio, meta_ingresos_usd,
+                presupuesto_maximo_usd, fecha_creacion,
+                fecha_ultima_actualizacion
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (nombre) DO UPDATE
+            SET meta_ingresos_usd = EXCLUDED.meta_ingresos_usd,
+                presupuesto_maximo_usd = EXCLUDED.presupuesto_maximo_usd,
+                fecha_ultima_actualizacion = EXCLUDED.fecha_ultima_actualizacion
+            RETURNING *
+            """,
+            (
+                "primer_ingreso",
+                "Extracción de datos entregada como JSON, CSV o API",
+                meta,
+                presupuesto,
+                fecha,
+                fecha,
+            ),
+        )
+        objetivo = cursor.fetchone()
+
+        cursor.execute(
+            """
+            INSERT INTO estrategias_comerciales (
+                nombre, canal, fecha_ultima_actualizacion
+            )
+            VALUES (%s, %s, %s)
+            ON CONFLICT (nombre) DO UPDATE
+            SET fecha_ultima_actualizacion = EXCLUDED.fecha_ultima_actualizacion
+            RETURNING *
+            """,
+            ("oferta_personalizada", "oportunidad_detectada", fecha),
+        )
+        estrategia = cursor.fetchone()
+
+    conexion.commit()
+    return objetivo, estrategia
+
+
+def crear_oferta_comercial(lead):
+    necesidad = " ".join(
+        str(lead["necesidad_detectada"] or "").split()
+    )[:420]
+    titulo = str(lead["titulo_fuente"] or lead["empresa_o_persona"])
+
+    return (
+        f"Hello, I reviewed your request: {titulo}.\n\n"
+        f"The core need I identified is: {necesidad}\n\n"
+        "I can begin with a small paid pilot: one target source, the exact "
+        "fields you require, and delivery as structured JSON or CSV. After "
+        "we verify accuracy together, the same workflow can be expanded into "
+        "a recurring process or API.\n\n"
+        "Before starting, please confirm the target website, required fields, "
+        "expected volume, and update frequency. I will then define the scope, "
+        "delivery time, and fixed pilot price without promising untested results."
+    )
+
+
+def calcular_prioridad(lead, estrategia):
+    prioridad = float(lead["puntuacion"])
+    texto = " ".join(
+        [
+            str(lead["titulo_fuente"] or ""),
+            str(lead["extracto_fuente"] or ""),
+        ]
+    ).lower()
+
+    if "50+" in texto:
+        prioridad -= 35
+    elif "20 to 50" in texto or "20-50" in texto:
+        prioridad -= 20
+
+    if "hires: 1" in texto or "1 hire" in texto:
+        prioridad -= 25
+
+    if "payment verified" in texto:
+        prioridad += 8
+
+    prioridad += (float(estrategia["puntuacion_estrategia"]) - 50) * 0.2
+    return max(0, min(100, round(prioridad, 2)))
+
+
+def ejecutar_ciclo_comercial(conexion):
+    objetivo, estrategia = asegurar_objetivo_y_estrategia(conexion)
+
+    if float(objetivo["ingresos_confirmados_usd"]) >= float(objetivo["meta_ingresos_usd"]):
+        return {
+            "estado": "meta_cumplida",
+            "objetivo": objetivo,
+            "mensaje": "La meta económica activa ya fue alcanzada.",
+        }
+
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT l.*
+            FROM leads l
+            WHERE l.estado = 'cualificado'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM acciones_comerciales a
+                  WHERE a.lead_id = l.id
+              )
+            ORDER BY l.puntuacion DESC, l.fecha_descubrimiento DESC
+            LIMIT 25
+            """
+        )
+        candidatos = cursor.fetchall()
+
+        if not candidatos:
+            return {
+                "estado": "sin_oportunidad",
+                "objetivo": objetivo,
+                "mensaje": "No hay oportunidades cualificadas nuevas. Debe ejecutarse BUSCAR.",
+            }
+
+        evaluados = [
+            (calcular_prioridad(lead, estrategia), lead)
+            for lead in candidatos
+        ]
+        prioridad, lead = max(evaluados, key=lambda elemento: elemento[0])
+
+        if prioridad < 65:
+            return {
+                "estado": "sin_oportunidad_rentable",
+                "objetivo": objetivo,
+                "mejor_prioridad": prioridad,
+                "mensaje": "Las oportunidades actuales no justifican una acción.",
+            }
+
+        contenido = crear_oferta_comercial(lead)
+        valor_estimado = 60.0 if prioridad < 85 else 100.0
+        coste_estimado = 0.0
+        fecha = ahora()
+        razon = (
+            f"Lead {lead['id']} seleccionado con prioridad {prioridad}/100; "
+            "coincide con extracción de datos y todavía no tiene una acción registrada."
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO acciones_comerciales (
+                objetivo_id, estrategia_id, lead_id, tipo_accion,
+                prioridad, razon_decision, contenido,
+                valor_estimado_usd, coste_estimado_usd, fecha_creacion
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                objetivo["id"],
+                estrategia["id"],
+                lead["id"],
+                "presentar_oferta",
+                prioridad,
+                razon,
+                contenido,
+                valor_estimado,
+                coste_estimado,
+                fecha,
+            ),
+        )
+        accion = cursor.fetchone()
+
+        cursor.execute(
+            """
+            UPDATE leads
+            SET estado = 'propuesta_pendiente_revision',
+                propuesta = %s,
+                fecha_ultima_actualizacion = %s
+            WHERE id = %s
+            """,
+            (contenido, fecha, lead["id"]),
+        )
+        cursor.execute(
+            """
+            INSERT INTO historial_lead (
+                lead_id, fecha, estado_anterior, estado_nuevo, nota
+            ) VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                lead["id"],
+                fecha,
+                "cualificado",
+                "propuesta_pendiente_revision",
+                razon,
+            ),
+        )
+        cursor.execute(
+            """
+            UPDATE estrategias_comerciales
+            SET intentos = intentos + 1,
+                fecha_ultima_actualizacion = %s
+            WHERE id = %s
+            """,
+            (fecha, estrategia["id"]),
+        )
+
+    conexion.commit()
+    return {
+        "estado": "accion_pendiente_aprobacion",
+        "objetivo": objetivo,
+        "accion": accion,
+        "intervencion_humana": "Aprobar o rechazar. VIERNES no enviará nada todavía.",
+    }
+
+
+def obtener_acciones_pendientes(conexion, limite=20):
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                a.*,
+                l.empresa_o_persona,
+                l.url_fuente,
+                l.necesidad_detectada
+            FROM acciones_comerciales a
+            JOIN leads l ON l.id = a.lead_id
+            WHERE a.estado IN (
+                'pendiente_aprobacion',
+                'aprobada_pendiente_ejecucion'
+            )
+            ORDER BY a.prioridad DESC, a.fecha_creacion ASC
+            LIMIT %s
+            """,
+            (limite,),
+        )
+        return cursor.fetchall()
+
+
+def decidir_accion(conexion, accion_id, decision, nota=""):
+    if decision not in {"aprobar", "rechazar"}:
+        raise ValueError("La decisión debe ser aprobar o rechazar.")
+
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT * FROM acciones_comerciales
+            WHERE id = %s AND estado = 'pendiente_aprobacion'
+            FOR UPDATE
+            """,
+            (accion_id,),
+        )
+        accion = cursor.fetchone()
+        if accion is None:
+            raise ValueError("La acción no existe o ya fue decidida.")
+
+        fecha = ahora()
+        estado = (
+            "aprobada_pendiente_ejecucion"
+            if decision == "aprobar"
+            else "rechazada"
+        )
+        cursor.execute(
+            """
+            UPDATE acciones_comerciales
+            SET estado = %s, nota_humana = %s, fecha_decision = %s
+            WHERE id = %s
+            RETURNING *
+            """,
+            (estado, nota, fecha, accion_id),
+        )
+        actualizada = cursor.fetchone()
+        cursor.execute(
+            """
+            UPDATE estrategias_comerciales
+            SET aprobaciones = aprobaciones + %s,
+                rechazos = rechazos + %s,
+                fecha_ultima_actualizacion = %s
+            WHERE id = %s
+            """,
+            (
+                1 if decision == "aprobar" else 0,
+                1 if decision == "rechazar" else 0,
+                fecha,
+                accion["estrategia_id"],
+            ),
+        )
+        if decision == "rechazar":
+            cursor.execute(
+                """
+                UPDATE leads
+                SET estado = 'descartado',
+                    fecha_ultima_actualizacion = %s
+                WHERE id = %s
+                """,
+                (fecha, accion["lead_id"]),
+            )
+
+    conexion.commit()
+    return actualizada
+
+
+def obtener_estado_agente(conexion):
+    objetivo, estrategia = asegurar_objetivo_y_estrategia(conexion)
+    pendientes = obtener_acciones_pendientes(conexion, limite=5)
+    return {
+        "objetivo_activo": objetivo,
+        "estrategia_activa": estrategia,
+        "acciones_pendientes": pendientes,
+        "regla_humana": (
+            "Solo requiere aprobación para contacto, contratos, gastos y cobros."
+        ),
     }
