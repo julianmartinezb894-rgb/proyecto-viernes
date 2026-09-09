@@ -69,6 +69,29 @@ EXPRESIONES_CONTENIDO_NO_COMPRADOR = (
     "data extraction tools",
 )
 
+ESTRATEGIAS_AUTONOMAS = {
+    "oferta_directa": {
+        "canal": "prospeccion_directa",
+        "nicho": "oportunidades directas de extracción de datos",
+        "consultas": (
+            '"looking for" "web scraping" -site:upwork.com -site:reddit.com',
+            '"need" "data extraction" -site:upwork.com -site:reddit.com',
+            '"seeking" "web scraping" -site:upwork.com -site:reddit.com',
+        ),
+    },
+    "rfp_publica": {
+        "canal": "solicitudes_publicas",
+        "nicho": "solicitudes públicas de extracción de datos",
+        "consultas": (
+            '"request for proposal" "web scraping"',
+            '"request for quotation" "data extraction"',
+            '"RFP" "data collection API"',
+        ),
+    },
+}
+
+MAX_FALLOS_CONSECUTIVOS = 3
+
 
 def ahora():
     return datetime.now(timezone.utc).isoformat(
@@ -346,6 +369,29 @@ def abrir_base_datos():
                 puntuacion_estrategia NUMERIC(8, 2) NOT NULL DEFAULT 50,
                 estado TEXT NOT NULL DEFAULT 'activa',
                 fecha_ultima_actualizacion TIMESTAMPTZ NOT NULL
+            )
+            """
+        )
+
+        cursor.execute(
+            """
+            ALTER TABLE estrategias_comerciales
+            ADD COLUMN IF NOT EXISTS fallos_consecutivos INTEGER NOT NULL DEFAULT 0
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ciclos_agente (
+                id BIGSERIAL PRIMARY KEY,
+                objetivo_id BIGINT NOT NULL REFERENCES objetivos_comerciales(id),
+                estrategia_id BIGINT NOT NULL REFERENCES estrategias_comerciales(id),
+                estado TEXT NOT NULL,
+                resultados_encontrados INTEGER NOT NULL DEFAULT 0,
+                leads_guardados INTEGER NOT NULL DEFAULT 0,
+                leads_cualificados INTEGER NOT NULL DEFAULT 0,
+                mensaje TEXT NOT NULL,
+                fecha TIMESTAMPTZ NOT NULL
             )
             """
         )
@@ -640,17 +686,33 @@ def asegurar_objetivo_y_estrategia(conexion):
         )
         objetivo = cursor.fetchone()
 
+        for nombre, configuracion in ESTRATEGIAS_AUTONOMAS.items():
+            cursor.execute(
+                """
+                INSERT INTO estrategias_comerciales (
+                    nombre, canal, fecha_ultima_actualizacion
+                )
+                VALUES (%s, %s, %s)
+                ON CONFLICT (nombre) DO UPDATE
+                SET canal = EXCLUDED.canal,
+                    fecha_ultima_actualizacion = EXCLUDED.fecha_ultima_actualizacion
+                """,
+                (nombre, configuracion["canal"], fecha),
+            )
+
         cursor.execute(
             """
-            INSERT INTO estrategias_comerciales (
-                nombre, canal, fecha_ultima_actualizacion
-            )
-            VALUES (%s, %s, %s)
-            ON CONFLICT (nombre) DO UPDATE
-            SET fecha_ultima_actualizacion = EXCLUDED.fecha_ultima_actualizacion
-            RETURNING *
+            SELECT *
+            FROM estrategias_comerciales
+            WHERE nombre = ANY(%s)
+              AND estado = 'activa'
+              AND fallos_consecutivos < %s
+            ORDER BY puntuacion_estrategia DESC,
+                     fallos_consecutivos ASC,
+                     id ASC
+            LIMIT 1
             """,
-            ("oferta_directa", "prospeccion_directa", fecha),
+            (list(ESTRATEGIAS_AUTONOMAS), MAX_FALLOS_CONSECUTIVOS),
         )
         estrategia = cursor.fetchone()
 
@@ -701,16 +763,7 @@ def calcular_prioridad(lead, estrategia):
     return max(0, min(100, round(prioridad, 2)))
 
 
-def ejecutar_ciclo_comercial(conexion):
-    objetivo, estrategia = asegurar_objetivo_y_estrategia(conexion)
-
-    if float(objetivo["ingresos_confirmados_usd"]) >= float(objetivo["meta_ingresos_usd"]):
-        return {
-            "estado": "meta_cumplida",
-            "objetivo": objetivo,
-            "mensaje": "La meta económica activa ya fue alcanzada.",
-        }
-
+def obtener_candidatos_para_accion(conexion):
     with conexion.cursor() as cursor:
         cursor.execute(
             """
@@ -727,14 +780,145 @@ def ejecutar_ciclo_comercial(conexion):
             LIMIT 25
             """
         )
-        candidatos = cursor.fetchall()
+        return cursor.fetchall()
 
-        if not candidatos:
-            return {
-                "estado": "sin_oportunidad",
-                "objetivo": objetivo,
-                "mensaje": "No hay oportunidades cualificadas nuevas. Debe ejecutarse BUSCAR.",
-            }
+
+def buscar_con_estrategia(conexion, estrategia):
+    configuracion = ESTRATEGIAS_AUTONOMAS[estrategia["nombre"]]
+    total = {
+        "resultados_tavily": 0,
+        "leads_guardados": 0,
+        "duplicados": 0,
+        "cualificados": 0,
+    }
+
+    for consulta in configuracion["consultas"]:
+        resumen = descubrir_leads(
+            conexion,
+            configuracion["nicho"],
+            consulta,
+        )
+        for clave in total:
+            total[clave] += resumen[clave]
+
+    return total
+
+
+def registrar_ciclo(
+    conexion,
+    objetivo_id,
+    estrategia_id,
+    estado,
+    resumen,
+    mensaje,
+):
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO ciclos_agente (
+                objetivo_id, estrategia_id, estado,
+                resultados_encontrados, leads_guardados,
+                leads_cualificados, mensaje, fecha
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                objetivo_id,
+                estrategia_id,
+                estado,
+                resumen.get("resultados_tavily", 0),
+                resumen.get("leads_guardados", 0),
+                resumen.get("cualificados", 0),
+                mensaje,
+                ahora(),
+            ),
+        )
+
+
+def registrar_fallo_de_estrategia(conexion, estrategia):
+    fecha = ahora()
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE estrategias_comerciales
+            SET intentos = intentos + 1,
+                fallos_consecutivos = fallos_consecutivos + 1,
+                puntuacion_estrategia = GREATEST(
+                    0,
+                    puntuacion_estrategia - 5
+                ),
+                estado = CASE
+                    WHEN fallos_consecutivos + 1 >= %s THEN 'agotada'
+                    ELSE estado
+                END,
+                fecha_ultima_actualizacion = %s
+            WHERE id = %s
+            RETURNING *
+            """,
+            (MAX_FALLOS_CONSECUTIVOS, fecha, estrategia["id"]),
+        )
+        return cursor.fetchone()
+
+
+def ejecutar_ciclo_comercial(conexion):
+    objetivo, estrategia = asegurar_objetivo_y_estrategia(conexion)
+
+    if float(objetivo["ingresos_confirmados_usd"]) >= float(objetivo["meta_ingresos_usd"]):
+        return {
+            "estado": "meta_cumplida",
+            "objetivo": objetivo,
+            "mensaje": "La meta económica activa ya fue alcanzada.",
+        }
+
+    if estrategia is None:
+        return {
+            "estado": "estrategias_agotadas",
+            "objetivo": objetivo,
+            "mensaje": (
+                "Las estrategias disponibles alcanzaron su límite de fallos. "
+                "VIERNES no repetirá búsquedas improductivas."
+            ),
+        }
+
+    candidatos = obtener_candidatos_para_accion(conexion)
+    resumen_busqueda = {
+        "resultados_tavily": 0,
+        "leads_guardados": 0,
+        "duplicados": 0,
+        "cualificados": 0,
+    }
+
+    if not candidatos:
+        resumen_busqueda = buscar_con_estrategia(conexion, estrategia)
+        candidatos = obtener_candidatos_para_accion(conexion)
+
+    if not candidatos:
+        estrategia_actualizada = registrar_fallo_de_estrategia(
+            conexion,
+            estrategia,
+        )
+        mensaje = (
+            "VIERNES buscó automáticamente, no encontró una oportunidad "
+            "cualificada y registró el fallo para no repetir indefinidamente."
+        )
+        registrar_ciclo(
+            conexion,
+            objetivo["id"],
+            estrategia["id"],
+            "busqueda_sin_oportunidad",
+            resumen_busqueda,
+            mensaje,
+        )
+        conexion.commit()
+        return {
+            "estado": "busqueda_sin_oportunidad",
+            "objetivo": objetivo,
+            "estrategia": estrategia_actualizada,
+            "busqueda": resumen_busqueda,
+            "mensaje": mensaje,
+        }
+
+    with conexion.cursor() as cursor:
 
         evaluados = [
             (calcular_prioridad(lead, estrategia), lead)
@@ -812,6 +996,7 @@ def ejecutar_ciclo_comercial(conexion):
             """
             UPDATE estrategias_comerciales
             SET intentos = intentos + 1,
+                fallos_consecutivos = 0,
                 fecha_ultima_actualizacion = %s
             WHERE id = %s
             """,
@@ -819,9 +1004,20 @@ def ejecutar_ciclo_comercial(conexion):
         )
 
     conexion.commit()
+    registrar_ciclo(
+        conexion,
+        objetivo["id"],
+        estrategia["id"],
+        "accion_pendiente_aprobacion",
+        resumen_busqueda,
+        razon,
+    )
+    conexion.commit()
     return {
         "estado": "accion_pendiente_aprobacion",
         "objetivo": objetivo,
+        "estrategia": estrategia,
+        "busqueda": resumen_busqueda,
         "accion": accion,
         "intervencion_humana": "Aprobar o rechazar. VIERNES no enviará nada todavía.",
     }
