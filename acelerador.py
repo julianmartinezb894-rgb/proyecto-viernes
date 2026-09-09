@@ -1,27 +1,14 @@
-# FILE: acelerador.py
-# VIERNES 2.0 — Arrancador principal de Render
-#
-# Funciones:
-# 1. Carga app.py sin modificarlo.
-# 2. Inyecta la ruta /despertar.
-# 3. Sustituye el motor de búsqueda por buscador_web.py.
-# 4. Mantiene el proceso Flask activo.
-#
-# IMPORTANTE:
-# No se ejecuta auto_marketing.py desde aquí.
-
-import sys
-import threading
 import os
+import secrets
+import sys
+
+from flask import jsonify, request
+
 
 print(
-    "[ACELERADOR] Iniciando inyección dinámica de VIERNES...",
+    "[ACELERADOR] Iniciando VIERNES...",
     flush=True
 )
-
-# ============================================================
-# 1. CARGAR APLICACIÓN BASE
-# ============================================================
 
 try:
     import app as app_original
@@ -34,7 +21,7 @@ except Exception as error:
 
 if not hasattr(app_original, "app"):
     print(
-        "[ACELERADOR] ERROR CRÍTICO: app.py no contiene 'app'.",
+        "[ACELERADOR] ERROR: app.py no contiene app.",
         flush=True
     )
     sys.exit(1)
@@ -46,9 +33,6 @@ print(
     flush=True
 )
 
-# ============================================================
-# 2. RUTA DE SALUD
-# ============================================================
 
 if not any(
     regla.rule == "/despertar"
@@ -56,24 +40,11 @@ if not any(
 ):
     @flask_app.route("/despertar", methods=["GET", "HEAD"])
     def despertar_sistema():
-        return {
+        return jsonify({
             "status": "online",
             "message": "VIERNES activo y operativo"
-        }, 200
+        }), 200
 
-    print(
-        "[ACELERADOR] Ruta /despertar inyectada.",
-        flush=True
-    )
-else:
-    print(
-        "[ACELERADOR] Ruta /despertar ya existe.",
-        flush=True
-    )
-
-# ============================================================
-# 3. SUSTITUIR EL MOTOR DE BÚSQUEDA
-# ============================================================
 
 try:
     from buscador_web import buscar_web
@@ -81,20 +52,17 @@ try:
     app_original.scraping_alternativo = buscar_web
 
     print(
-        "[ACELERADOR] Motor web Tavily conectado correctamente.",
+        "[ACELERADOR] Motor Tavily conectado.",
         flush=True
     )
 
 except Exception as error:
     print(
-        f"[ACELERADOR] ERROR al conectar buscador_web.py: {error}",
+        f"[ACELERADOR] Error al conectar Tavily: {error}",
         flush=True
     )
     sys.exit(1)
 
-# ============================================================
-# 4. CACHE OPCIONAL
-# ============================================================
 
 try:
     from cache_viernes import (
@@ -105,11 +73,6 @@ try:
     buscador_web_original = app_original.scraping_alternativo
 
     def busqueda_con_cache(termino, *args, **kwargs):
-        """
-        Primero intenta obtener el resultado desde memoria.
-        Si no existe, consulta Tavily y guarda la respuesta.
-        """
-
         try:
             datos_cache = obtener_datos_rapidos(termino)
 
@@ -122,15 +85,9 @@ try:
 
         except Exception as error:
             print(
-                f"[ACELERADOR] Error leyendo cache: {error}",
+                f"[ACELERADOR] Error de cache: {error}",
                 flush=True
             )
-
-        print(
-            f"[ACELERADOR] Cache MISS: {termino}. "
-            "Consultando web...",
-            flush=True
-        )
 
         resultado = buscador_web_original(
             termino,
@@ -154,20 +111,97 @@ try:
     app_original.scraping_alternativo = busqueda_con_cache
 
     print(
-        "[ACELERADOR] Sistema de cache conectado al motor web.",
+        "[ACELERADOR] Cache conectado.",
         flush=True
     )
 
 except Exception as error:
     print(
-        f"[ACELERADOR] Cache no disponible. "
-        f"Continuando sin cache: {error}",
+        f"[ACELERADOR] Cache no disponible: {error}",
         flush=True
     )
 
-# ============================================================
-# 5. PUERTO DE RENDER
-# ============================================================
+
+NICHO_INICIAL = "agencias de automatización"
+
+CONSULTA_INICIAL = (
+    "companies needing web scraping API data extraction automation"
+)
+
+
+def token_valido():
+    token_configurado = os.environ.get(
+        "PIPELINE_ADMIN_TOKEN",
+        ""
+    )
+
+    token_recibido = request.headers.get(
+        "X-Pipeline-Token",
+        ""
+    )
+
+    if not token_configurado:
+        return False
+
+    return secrets.compare_digest(
+        token_recibido,
+        token_configurado
+    )
+
+
+if not any(
+    regla.rule == "/pipeline/descubrir"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/pipeline/descubrir",
+        methods=["POST"]
+    )
+    def ejecutar_descubrimiento_comercial():
+        if not token_valido():
+            return jsonify({
+                "error": "No autorizado"
+            }), 401
+
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                descubrir_leads
+            )
+
+            conexion = abrir_base_datos()
+
+            try:
+                resumen = descubrir_leads(
+                    conexion,
+                    NICHO_INICIAL,
+                    CONSULTA_INICIAL
+                )
+            finally:
+                conexion.close()
+
+            print(
+                "[ACELERADOR] Pipeline comercial ejecutado.",
+                flush=True
+            )
+
+            return jsonify({
+                "status": "ok",
+                "nicho": NICHO_INICIAL,
+                "consulta": CONSULTA_INICIAL,
+                "resultado": resumen
+            }), 200
+
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error en pipeline: {error}",
+                flush=True
+            )
+
+            return jsonify({
+                "error": "Error al ejecutar pipeline comercial"
+            }), 500
+
 
 def obtener_puerto():
     try:
@@ -175,20 +209,10 @@ def obtener_puerto():
             os.environ.get("PORT", "10000")
         )
     except (TypeError, ValueError):
-        print(
-            "[ACELERADOR] PORT inválido. "
-            "Utilizando 10000.",
-            flush=True
-        )
         return 10000
 
 
-# ============================================================
-# 6. ARRANQUE
-# ============================================================
-
 if __name__ == "__main__":
-
     puerto = obtener_puerto()
 
     print(
