@@ -8,42 +8,19 @@ from psycopg.rows import dict_row
 from buscador_web import buscar_web
 
 
-PALABRAS_INTENCION = (
-    "looking for",
-    "need",
-    "seeking",
-    "hiring",
-    "request",
-    "web scraping",
-    "scraping",
-    "data extraction",
-    "data extractor",
-    "api",
-    "automation",
-    "automatización",
-    "busco",
-    "necesito",
-    "buscamos",
-    "contratar",
-    "extraer datos",
+DOMINIOS_DEMANDA_DIRECTA = (
+    "reddit.com",
 )
 
-PALABRAS_DESCARTE = (
-    "tutorial",
-    "course",
-    "curso",
-    "documentation",
-    "documentación",
-    "wikipedia",
-    "best web scraping",
-    "top web scraping",
-    "review",
-    "reviews",
-    "comparison",
-    "comparación",
-    "alternatives",
-    "alternativas",
-    "vs.",
+EXPRESIONES_DEMANDA_DIRECTA = (
+    "need web scraping",
+    "need a web scraper",
+    "looking for a web scraper",
+    "looking for web scraping",
+    "hire a web scraper",
+    "need data extraction",
+    "looking for data extraction",
+    "recommend a web scraping",
 )
 
 ESTADOS_RECALIFICABLES = (
@@ -58,6 +35,22 @@ def ahora():
     )
 
 
+def dominio_permitido(url):
+    dominio = urlparse(url).netloc.lower().replace(
+        "www.",
+        ""
+    )
+
+    for permitido in DOMINIOS_DEMANDA_DIRECTA:
+        if dominio == permitido:
+            return True
+
+        if dominio.endswith("." + permitido):
+            return True
+
+    return False
+
+
 def obtener_texto(resultado):
     return " ".join(
         [
@@ -69,74 +62,47 @@ def obtener_texto(resultado):
 
 
 def puntuar_lead(resultado):
+    url = str(resultado.get("url", "")).strip()
     texto = obtener_texto(resultado)
-    titulo = str(
-        resultado.get("titulo", "")
-    ).strip().lower()
+
+    if not dominio_permitido(url):
+        return (
+            0,
+            "Fuente descartada: no es una fuente de demanda directa."
+        )
 
     coincidencias = [
-        palabra
-        for palabra in PALABRAS_INTENCION
-        if palabra in texto
+        expresion
+        for expresion in EXPRESIONES_DEMANDA_DIRECTA
+        if expresion in texto
     ]
 
-    descartes = [
-        palabra
-        for palabra in PALABRAS_DESCARTE
-        if palabra in texto
-    ]
-
-    puntuacion = min(len(coincidencias) * 12, 60)
+    if not coincidencias:
+        return (
+            0,
+            "Fuente válida, pero sin una petición directa de servicio."
+        )
 
     contenido = str(
         resultado.get("contenido", "")
     ).strip()
 
+    puntuacion = 70
+
     if len(contenido) >= 180:
         puntuacion += 15
 
-    if urlparse(
-        str(resultado.get("url", ""))
-    ).netloc:
+    if len(coincidencias) >= 2:
         puntuacion += 10
 
-    if titulo.startswith("best "):
-        puntuacion -= 50
+    puntuacion = min(100, puntuacion)
 
-    if titulo.startswith("top "):
-        puntuacion -= 50
-
-    puntuacion -= min(
-        len(descartes) * 20,
-        70
+    explicacion = (
+        "Demanda directa detectada en Reddit: "
+        + ", ".join(coincidencias[:3])
     )
 
-    puntuacion = max(0, min(100, puntuacion))
-
-    explicacion = []
-
-    if coincidencias:
-        explicacion.append(
-            "Señales detectadas: "
-            + ", ".join(coincidencias[:5])
-        )
-    else:
-        explicacion.append(
-            "Sin señales claras de intención de compra"
-        )
-
-    if descartes:
-        explicacion.append(
-            "Descartes detectados: "
-            + ", ".join(descartes[:4])
-        )
-
-    if len(contenido) >= 180:
-        explicacion.append(
-            "Resultado con contexto suficiente"
-        )
-
-    return puntuacion, ". ".join(explicacion)
+    return puntuacion, explicacion
 
 
 def recalificar_leads_existentes(conexion):
@@ -169,7 +135,7 @@ def recalificar_leads_existentes(conexion):
                 resultado
             )
 
-            if puntuacion >= 45:
+            if puntuacion >= 70:
                 estado_nuevo = "cualificado"
             else:
                 estado_nuevo = "descubierto"
@@ -214,7 +180,7 @@ def recalificar_leads_existentes(conexion):
                         fecha,
                         lead["estado"],
                         estado_nuevo,
-                        "Recalificación: filtro anti-competidores y anti-artículos comparativos.",
+                        "Recalificación: solo fuentes con demanda directa.",
                     ),
                 )
 
@@ -296,13 +262,10 @@ def identificar_empresa(resultado):
         resultado.get("titulo", "")
     ).strip()
 
-    if dominio:
-        return dominio, dominio
-
     if titulo:
-        return titulo[:255], ""
+        return titulo[:255], dominio
 
-    return "Entidad sin identificar", ""
+    return "Autor sin identificar", dominio
 
 
 def descubrir_leads(conexion, nicho, consulta):
@@ -332,7 +295,7 @@ def descubrir_leads(conexion, nicho, consulta):
                 resultado
             )
 
-            if puntuacion >= 45:
+            if puntuacion >= 70:
                 estado = "cualificado"
             else:
                 estado = "descubierto"
