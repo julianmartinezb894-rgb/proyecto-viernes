@@ -19,13 +19,9 @@ EXPRESIONES_DEMANDA = (
     "we need",
     "i need",
     "seeking",
+    "hiring",
     "needed",
     "required",
-    "build",
-    "develop",
-    "developer",
-    "specialist",
-    "freelancer",
 )
 
 EXPRESIONES_SERVICIO = (
@@ -43,6 +39,33 @@ DOMINIOS_DESCARTADOS = (
     "medium.com",
     "youtube.com",
     "github.com",
+    "browserless.io",
+    "xbyte.io",
+    "visualping.io",
+    "ficstar.medium.com",
+    "skyvia.com",
+    "acceldata.io",
+    "scrapethissite.com",
+    "webscraper.io",
+    "scrapingbee.com",
+    "uniquesdata.com",
+    "blog.datahut.co",
+)
+
+EXPRESIONES_CONTENIDO_NO_COMPRADOR = (
+    "best web scraping",
+    "top web scraping",
+    "web scraping tools",
+    "web scraper tools",
+    "how to web scrape",
+    "how to scrape",
+    "guide to web scraping",
+    "learn web scraping",
+    "web scraping tutorial",
+    "web scraping api",
+    "api access",
+    "companies offering",
+    "data extraction tools",
 )
 
 
@@ -61,16 +84,6 @@ def es_oportunidad_directa(url):
     return bool(dominio) and dominio not in DOMINIOS_DESCARTADOS
 
 
-def obtener_texto(resultado):
-    return " ".join(
-        [
-            str(resultado.get("titulo", "")),
-            str(resultado.get("contenido", "")),
-            str(resultado.get("url", "")),
-        ]
-    ).lower()
-
-
 def puntuar_lead(resultado):
     url = str(
         resultado.get("url", "")
@@ -82,24 +95,43 @@ def puntuar_lead(resultado):
             "Fuente descartada: no es una oportunidad comercial directa."
         )
 
-    texto = obtener_texto(resultado)
+    titulo = str(resultado.get("titulo", "")).lower()
+    evidencia_inicial = " ".join(
+        [
+            titulo,
+            str(resultado.get("contenido", ""))[:700].lower(),
+        ]
+    )
+
+    descartes = [
+        expresion
+        for expresion in EXPRESIONES_CONTENIDO_NO_COMPRADOR
+        if expresion in titulo
+    ]
+
+    if descartes:
+        return (
+            0,
+            "Fuente descartada: contenido o proveedor, no comprador: "
+            + ", ".join(descartes[:2]),
+        )
 
     coincidencias = [
         expresion
         for expresion in EXPRESIONES_DEMANDA
-        if expresion in texto
+        if expresion in evidencia_inicial
     ]
 
     servicios = [
         expresion
         for expresion in EXPRESIONES_SERVICIO
-        if expresion in texto
+        if expresion in evidencia_inicial
     ]
 
     if not coincidencias or not servicios:
         return (
             0,
-            "Sin evidencia suficiente de demanda comercial y servicio compatible."
+            "Sin evidencia temprana de demanda comercial y servicio compatible."
         )
 
     puntuacion = 65
@@ -165,6 +197,8 @@ def recalificar_leads_existentes(conexion):
 
             if puntuacion >= 70:
                 estado_nuevo = "cualificado"
+            elif puntuacion == 0:
+                estado_nuevo = "descartado"
             else:
                 estado_nuevo = "descubierto"
 
@@ -391,6 +425,8 @@ def descubrir_leads(conexion, nicho, consulta):
 
             if puntuacion >= 70:
                 estado = "cualificado"
+            elif puntuacion == 0:
+                estado = "descartado"
             else:
                 estado = "descubierto"
 
