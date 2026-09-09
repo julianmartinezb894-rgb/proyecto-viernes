@@ -8,24 +8,23 @@ from psycopg.rows import dict_row
 from buscador_web import buscar_web
 
 
-DOMINIOS_DEMANDA_DIRECTA = (
-    "reddit.com",
-)
-
-EXPRESIONES_DEMANDA_DIRECTA = (
-    "need web scraping",
-    "need a web scraper",
-    "looking for a web scraper",
-    "looking for web scraping",
-    "hire a web scraper",
-    "need data extraction",
-    "looking for data extraction",
-    "recommend a web scraping",
-)
-
 ESTADOS_RECALIFICABLES = (
     "descubierto",
     "cualificado",
+)
+
+EXPRESIONES_DEMANDA = (
+    "looking for",
+    "we need",
+    "i need",
+    "seeking",
+    "needed",
+    "required",
+    "build",
+    "develop",
+    "developer",
+    "specialist",
+    "freelancer",
 )
 
 
@@ -35,20 +34,20 @@ def ahora():
     )
 
 
-def dominio_permitido(url):
-    dominio = urlparse(url).netloc.lower().replace(
+def es_oferta_upwork(url):
+    datos_url = urlparse(url)
+
+    dominio = datos_url.netloc.lower().replace(
         "www.",
         ""
     )
 
-    for permitido in DOMINIOS_DEMANDA_DIRECTA:
-        if dominio == permitido:
-            return True
+    ruta = datos_url.path.lower()
 
-        if dominio.endswith("." + permitido):
-            return True
-
-    return False
+    return (
+        dominio == "upwork.com"
+        and "/freelance-jobs/apply/" in ruta
+    )
 
 
 def obtener_texto(resultado):
@@ -62,44 +61,54 @@ def obtener_texto(resultado):
 
 
 def puntuar_lead(resultado):
-    url = str(resultado.get("url", "")).strip()
-    texto = obtener_texto(resultado)
+    url = str(
+        resultado.get("url", "")
+    ).strip()
 
-    if not dominio_permitido(url):
+    if not es_oferta_upwork(url):
         return (
             0,
-            "Fuente descartada: no es una fuente de demanda directa."
+            "Fuente descartada: no es una oferta individual de Upwork."
         )
+
+    texto = obtener_texto(resultado)
 
     coincidencias = [
         expresion
-        for expresion in EXPRESIONES_DEMANDA_DIRECTA
+        for expresion in EXPRESIONES_DEMANDA
         if expresion in texto
     ]
 
     if not coincidencias:
         return (
-            0,
-            "Fuente válida, pero sin una petición directa de servicio."
+            55,
+            "Oferta de Upwork sin suficiente evidencia de demanda."
         )
+
+    puntuacion = 75
+
+    if "posted" in texto:
+        puntuacion += 10
+
+    if (
+        "fixed-price" in texto
+        or "hourly" in texto
+        or "$" in texto
+    ):
+        puntuacion += 10
 
     contenido = str(
         resultado.get("contenido", "")
     ).strip()
 
-    puntuacion = 70
-
     if len(contenido) >= 180:
-        puntuacion += 15
-
-    if len(coincidencias) >= 2:
-        puntuacion += 10
+        puntuacion += 5
 
     puntuacion = min(100, puntuacion)
 
     explicacion = (
-        "Demanda directa detectada en Reddit: "
-        + ", ".join(coincidencias[:3])
+        "Oferta individual de Upwork con demanda: "
+        + ", ".join(coincidencias[:4])
     )
 
     return puntuacion, explicacion
@@ -180,7 +189,7 @@ def recalificar_leads_existentes(conexion):
                         fecha,
                         lead["estado"],
                         estado_nuevo,
-                        "Recalificación: solo fuentes con demanda directa.",
+                        "Recalificación: solo ofertas individuales de Upwork.",
                     ),
                 )
 
@@ -249,23 +258,14 @@ def abrir_base_datos():
 
 
 def identificar_empresa(resultado):
-    url = str(
-        resultado.get("url", "")
-    ).strip()
-
-    dominio = urlparse(url).netloc.lower().replace(
-        "www.",
-        ""
-    )
-
     titulo = str(
         resultado.get("titulo", "")
     ).strip()
 
     if titulo:
-        return titulo[:255], dominio
+        return titulo[:255], "upwork.com"
 
-    return "Autor sin identificar", dominio
+    return "Cliente de Upwork", "upwork.com"
 
 
 def descubrir_leads(conexion, nicho, consulta):
@@ -373,7 +373,7 @@ def descubrir_leads(conexion, nicho, consulta):
                     fecha,
                     None,
                     estado,
-                    "Lead descubierto mediante Tavily.",
+                    "Oferta encontrada mediante Tavily.",
                 ),
             )
 
