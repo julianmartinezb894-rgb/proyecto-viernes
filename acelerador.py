@@ -321,6 +321,131 @@ if not any(
             }), 500
 
 
+if not any(
+    regla.rule == "/agente/estado"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/agente/estado",
+        methods=["GET"]
+    )
+    def ver_estado_agente():
+        if not token_valido():
+            return jsonify({"error": "No autorizado"}), 401
+
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                obtener_estado_agente
+            )
+
+            conexion = abrir_base_datos()
+            try:
+                estado = obtener_estado_agente(conexion)
+            finally:
+                conexion.close()
+
+            return jsonify({
+                "status": "ok",
+                "agente": convertir_json(estado)
+            }), 200
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error leyendo agente: {error}",
+                flush=True
+            )
+            return jsonify({
+                "error": "Error al leer el estado del agente"
+            }), 500
+
+
+if not any(
+    regla.rule == "/agente/ciclo"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/agente/ciclo",
+        methods=["POST"]
+    )
+    def ejecutar_ciclo_agente():
+        if not token_valido():
+            return jsonify({"error": "No autorizado"}), 401
+
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                ejecutar_ciclo_comercial
+            )
+
+            conexion = abrir_base_datos()
+            try:
+                resultado = ejecutar_ciclo_comercial(conexion)
+            finally:
+                conexion.close()
+
+            return jsonify({
+                "status": "ok",
+                "resultado": convertir_json(resultado)
+            }), 200
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error ejecutando ciclo: {error}",
+                flush=True
+            )
+            return jsonify({
+                "error": "Error al ejecutar el ciclo comercial"
+            }), 500
+
+
+if not any(
+    regla.rule == "/agente/acciones/<int:accion_id>/decision"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/agente/acciones/<int:accion_id>/decision",
+        methods=["POST"]
+    )
+    def decidir_accion_agente(accion_id):
+        if not token_valido():
+            return jsonify({"error": "No autorizado"}), 401
+
+        datos = request.get_json(silent=True) or {}
+        decision = str(datos.get("decision", "")).strip().lower()
+        nota = str(datos.get("nota", "")).strip()[:1000]
+
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                decidir_accion
+            )
+
+            conexion = abrir_base_datos()
+            try:
+                accion = decidir_accion(
+                    conexion,
+                    accion_id,
+                    decision,
+                    nota
+                )
+            finally:
+                conexion.close()
+
+            return jsonify({
+                "status": "ok",
+                "accion": convertir_json(accion)
+            }), 200
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error decidiendo acción: {error}",
+                flush=True
+            )
+            return jsonify({
+                "error": "Error al registrar la decisión"
+            }), 500
+
+
 def obtener_puerto():
     try:
         return int(
