@@ -28,6 +28,23 @@ EXPRESIONES_DEMANDA = (
     "freelancer",
 )
 
+EXPRESIONES_SERVICIO = (
+    "web scraping",
+    "data extraction",
+    "data scraping",
+    "web crawler",
+    "data collection",
+    "scrape data",
+)
+
+DOMINIOS_DESCARTADOS = (
+    "upwork.com",
+    "reddit.com",
+    "medium.com",
+    "youtube.com",
+    "github.com",
+)
+
 
 def ahora():
     return datetime.now(timezone.utc).isoformat(
@@ -35,20 +52,13 @@ def ahora():
     )
 
 
-def es_oferta_upwork(url):
+def es_oportunidad_directa(url):
     datos_url = urlparse(url)
-
     dominio = datos_url.netloc.lower().replace(
         "www.",
         ""
     )
-
-    ruta = datos_url.path.lower()
-
-    return (
-        dominio == "upwork.com"
-        and "/freelance-jobs/apply/" in ruta
-    )
+    return bool(dominio) and dominio not in DOMINIOS_DESCARTADOS
 
 
 def obtener_texto(resultado):
@@ -66,10 +76,10 @@ def puntuar_lead(resultado):
         resultado.get("url", "")
     ).strip()
 
-    if not es_oferta_upwork(url):
+    if not es_oportunidad_directa(url):
         return (
             0,
-            "Fuente descartada: no es una oferta individual de Upwork."
+            "Fuente descartada: no es una oportunidad comercial directa."
         )
 
     texto = obtener_texto(resultado)
@@ -80,21 +90,27 @@ def puntuar_lead(resultado):
         if expresion in texto
     ]
 
-    if not coincidencias:
+    servicios = [
+        expresion
+        for expresion in EXPRESIONES_SERVICIO
+        if expresion in texto
+    ]
+
+    if not coincidencias or not servicios:
         return (
-            55,
-            "Oferta de Upwork sin suficiente evidencia de demanda."
+            0,
+            "Sin evidencia suficiente de demanda comercial y servicio compatible."
         )
 
-    puntuacion = 75
+    puntuacion = 65
 
-    if "posted" in texto:
+    if "contact" in texto or "email" in texto:
         puntuacion += 10
 
     if (
-        "fixed-price" in texto
-        or "hourly" in texto
-        or "$" in texto
+        "request a quote" in texto
+        or "get a quote" in texto
+        or "pricing" in texto
     ):
         puntuacion += 10
 
@@ -108,8 +124,10 @@ def puntuar_lead(resultado):
     puntuacion = min(100, puntuacion)
 
     explicacion = (
-        "Oferta individual de Upwork con demanda: "
-        + ", ".join(coincidencias[:4])
+        "Oportunidad directa con demanda: "
+        + ", ".join(coincidencias[:3])
+        + "; servicio compatible: "
+        + ", ".join(servicios[:2])
     )
 
     return puntuacion, explicacion
@@ -334,10 +352,14 @@ def identificar_empresa(resultado):
         resultado.get("titulo", "")
     ).strip()
 
-    if titulo:
-        return titulo[:255], "upwork.com"
+    dominio = urlparse(
+        str(resultado.get("url", ""))
+    ).netloc.lower().replace("www.", "")
 
-    return "Cliente de Upwork", "upwork.com"
+    if titulo:
+        return titulo[:255], dominio[:255]
+
+    return dominio or "Entidad sin identificar", dominio[:255]
 
 
 def descubrir_leads(conexion, nicho, consulta):
@@ -564,7 +586,7 @@ def asegurar_objetivo_y_estrategia(conexion):
             SET fecha_ultima_actualizacion = EXCLUDED.fecha_ultima_actualizacion
             RETURNING *
             """,
-            ("oferta_personalizada", "oportunidad_detectada", fecha),
+            ("oferta_directa", "prospeccion_directa", fecha),
         )
         estrategia = cursor.fetchone()
 
@@ -631,6 +653,7 @@ def ejecutar_ciclo_comercial(conexion):
             SELECT l.*
             FROM leads l
             WHERE l.estado = 'cualificado'
+              AND l.dominio <> 'upwork.com'
               AND NOT EXISTS (
                   SELECT 1
                   FROM acciones_comerciales a
@@ -801,12 +824,22 @@ def decidir_accion(conexion, accion_id, decision, nota=""):
             UPDATE estrategias_comerciales
             SET aprobaciones = aprobaciones + %s,
                 rechazos = rechazos + %s,
+                puntuacion_estrategia = CASE
+                    WHEN %s THEN GREATEST(0, puntuacion_estrategia - 10)
+                    ELSE LEAST(100, puntuacion_estrategia + 2)
+                END,
+                estado = CASE
+                    WHEN %s AND canal = 'oportunidad_detectada' THEN 'pausada'
+                    ELSE estado
+                END,
                 fecha_ultima_actualizacion = %s
             WHERE id = %s
             """,
             (
                 1 if decision == "aprobar" else 0,
                 1 if decision == "rechazar" else 0,
+                decision == "rechazar",
+                decision == "rechazar",
                 fecha,
                 accion["estrategia_id"],
             ),
