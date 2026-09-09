@@ -1,6 +1,4 @@
-import json
 import os
-import sys
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -10,25 +8,12 @@ from psycopg.rows import dict_row
 from buscador_web import buscar_web
 
 
-ESTADOS = (
-    "descubierto",
-    "cualificado",
-    "propuesta_pendiente_revision",
-    "propuesta_enviada",
-    "contactado",
-    "respuesta",
-    "prueba",
-    "conversion",
-    "descartado",
-)
-
 PALABRAS_INTENCION = (
     "looking for",
     "need",
     "seeking",
     "hiring",
     "request",
-    "alternative",
     "web scraping",
     "scraping",
     "data extraction",
@@ -50,19 +35,201 @@ PALABRAS_DESCARTE = (
     "documentation",
     "documentación",
     "wikipedia",
+    "best web scraping",
+    "top web scraping",
+    "review",
+    "reviews",
+    "comparison",
+    "comparación",
+    "alternatives",
+    "alternativas",
+    "vs.",
+)
+
+ESTADOS_RECALIFICABLES = (
+    "descubierto",
+    "cualificado",
 )
 
 
 def ahora():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(timezone.utc).isoformat(
+        timespec="seconds"
+    )
+
+
+def obtener_texto(resultado):
+    return " ".join(
+        [
+            str(resultado.get("titulo", "")),
+            str(resultado.get("contenido", "")),
+            str(resultado.get("url", "")),
+        ]
+    ).lower()
+
+
+def puntuar_lead(resultado):
+    texto = obtener_texto(resultado)
+    titulo = str(
+        resultado.get("titulo", "")
+    ).strip().lower()
+
+    coincidencias = [
+        palabra
+        for palabra in PALABRAS_INTENCION
+        if palabra in texto
+    ]
+
+    descartes = [
+        palabra
+        for palabra in PALABRAS_DESCARTE
+        if palabra in texto
+    ]
+
+    puntuacion = min(len(coincidencias) * 12, 60)
+
+    contenido = str(
+        resultado.get("contenido", "")
+    ).strip()
+
+    if len(contenido) >= 180:
+        puntuacion += 15
+
+    if urlparse(
+        str(resultado.get("url", ""))
+    ).netloc:
+        puntuacion += 10
+
+    if titulo.startswith("best "):
+        puntuacion -= 50
+
+    if titulo.startswith("top "):
+        puntuacion -= 50
+
+    puntuacion -= min(
+        len(descartes) * 20,
+        70
+    )
+
+    puntuacion = max(0, min(100, puntuacion))
+
+    explicacion = []
+
+    if coincidencias:
+        explicacion.append(
+            "Señales detectadas: "
+            + ", ".join(coincidencias[:5])
+        )
+    else:
+        explicacion.append(
+            "Sin señales claras de intención de compra"
+        )
+
+    if descartes:
+        explicacion.append(
+            "Descartes detectados: "
+            + ", ".join(descartes[:4])
+        )
+
+    if len(contenido) >= 180:
+        explicacion.append(
+            "Resultado con contexto suficiente"
+        )
+
+    return puntuacion, ". ".join(explicacion)
+
+
+def recalificar_leads_existentes(conexion):
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT
+                id,
+                titulo_fuente,
+                extracto_fuente,
+                url_fuente,
+                estado,
+                puntuacion
+            FROM leads
+            WHERE estado = ANY(%s)
+            """,
+            (list(ESTADOS_RECALIFICABLES),),
+        )
+
+        leads = cursor.fetchall()
+
+        for lead in leads:
+            resultado = {
+                "titulo": lead["titulo_fuente"] or "",
+                "contenido": lead["extracto_fuente"] or "",
+                "url": lead["url_fuente"] or "",
+            }
+
+            puntuacion, explicacion = puntuar_lead(
+                resultado
+            )
+
+            if puntuacion >= 45:
+                estado_nuevo = "cualificado"
+            else:
+                estado_nuevo = "descubierto"
+
+            if (
+                puntuacion != lead["puntuacion"]
+                or estado_nuevo != lead["estado"]
+            ):
+                fecha = ahora()
+
+                cursor.execute(
+                    """
+                    UPDATE leads
+                    SET puntuacion = %s,
+                        explicacion_puntuacion = %s,
+                        estado = %s,
+                        fecha_ultima_actualizacion = %s
+                    WHERE id = %s
+                    """,
+                    (
+                        puntuacion,
+                        explicacion,
+                        estado_nuevo,
+                        fecha,
+                        lead["id"],
+                    ),
+                )
+
+                cursor.execute(
+                    """
+                    INSERT INTO historial_lead (
+                        lead_id,
+                        fecha,
+                        estado_anterior,
+                        estado_nuevo,
+                        nota
+                    )
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (
+                        lead["id"],
+                        fecha,
+                        lead["estado"],
+                        estado_nuevo,
+                        "Recalificación: filtro anti-competidores y anti-artículos comparativos.",
+                    ),
+                )
+
+    conexion.commit()
 
 
 def abrir_base_datos():
-    database_url = os.environ.get("DATABASE_URL", "").strip()
+    database_url = os.environ.get(
+        "DATABASE_URL",
+        ""
+    ).strip()
 
     if not database_url:
         raise ValueError(
-            "DATABASE_URL no está configurada en Render."
+            "DATABASE_URL no está configurada."
         )
 
     conexion = psycopg.connect(
@@ -109,75 +276,25 @@ def abrir_base_datos():
         )
 
     conexion.commit()
+
+    recalificar_leads_existentes(conexion)
+
     return conexion
 
 
-def obtener_texto(resultado):
-    return " ".join(
-        [
-            str(resultado.get("titulo", "")),
-            str(resultado.get("contenido", "")),
-            str(resultado.get("url", "")),
-        ]
-    ).lower()
-
-
-def puntuar_lead(resultado):
-    texto = obtener_texto(resultado)
-
-    coincidencias = [
-        palabra
-        for palabra in PALABRAS_INTENCION
-        if palabra in texto
-    ]
-
-    descartes = [
-        palabra
-        for palabra in PALABRAS_DESCARTE
-        if palabra in texto
-    ]
-
-    puntuacion = min(len(coincidencias) * 12, 60)
-
-    contenido = str(resultado.get("contenido", "")).strip()
-
-    if len(contenido) >= 180:
-        puntuacion += 15
-
-    if urlparse(str(resultado.get("url", ""))).netloc:
-        puntuacion += 10
-
-    puntuacion -= min(len(descartes) * 15, 30)
-    puntuacion = max(0, min(100, puntuacion))
-
-    explicacion = []
-
-    if coincidencias:
-        explicacion.append(
-            "Señales detectadas: " + ", ".join(coincidencias[:5])
-        )
-    else:
-        explicacion.append(
-            "Sin señales claras de intención de compra"
-        )
-
-    if len(contenido) >= 180:
-        explicacion.append(
-            "Resultado con contexto suficiente"
-        )
-
-    if descartes:
-        explicacion.append(
-            "Penalización: " + ", ".join(descartes[:3])
-        )
-
-    return puntuacion, ". ".join(explicacion)
-
-
 def identificar_empresa(resultado):
-    url = str(resultado.get("url", "")).strip()
-    dominio = urlparse(url).netloc.lower().replace("www.", "")
-    titulo = str(resultado.get("titulo", "")).strip()
+    url = str(
+        resultado.get("url", "")
+    ).strip()
+
+    dominio = urlparse(url).netloc.lower().replace(
+        "www.",
+        ""
+    )
+
+    titulo = str(
+        resultado.get("titulo", "")
+    ).strip()
 
     if dominio:
         return dominio, dominio
@@ -200,13 +317,20 @@ def descubrir_leads(conexion, nicho, consulta):
 
     with conexion.cursor() as cursor:
         for resultado in resultados:
-            url = str(resultado.get("url", "")).strip()
+            url = str(
+                resultado.get("url", "")
+            ).strip()
 
             if not url:
                 continue
 
-            empresa, dominio = identificar_empresa(resultado)
-            puntuacion, explicacion = puntuar_lead(resultado)
+            empresa, dominio = identificar_empresa(
+                resultado
+            )
+
+            puntuacion, explicacion = puntuar_lead(
+                resultado
+            )
 
             if puntuacion >= 45:
                 estado = "cualificado"
@@ -286,7 +410,7 @@ def descubrir_leads(conexion, nicho, consulta):
                     fecha,
                     None,
                     estado,
-                    "Lead descubierto mediante Tavily",
+                    "Lead descubierto mediante Tavily.",
                 ),
             )
 
@@ -310,6 +434,7 @@ def obtener_leads(conexion, limite=20):
                 necesidad_detectada,
                 url_fuente,
                 titulo_fuente,
+                extracto_fuente,
                 nicho,
                 puntuacion,
                 explicacion_puntuacion,
@@ -356,102 +481,8 @@ def obtener_metricas(conexion):
 
     return {
         "total_leads": totales["total_leads"],
-        "ingresos_usd": float(totales["ingresos_usd"]),
+        "ingresos_usd": float(
+            totales["ingresos_usd"]
+        ),
         "por_estado": por_estado,
     }
-
-
-def generar_propuesta(conexion, lead_id):
-    with conexion.cursor() as cursor:
-        cursor.execute(
-            "SELECT * FROM leads WHERE id = %s",
-            (lead_id,),
-        )
-
-        lead = cursor.fetchone()
-
-        if lead is None:
-            raise ValueError("El lead no existe.")
-
-        if lead["estado"] not in (
-            "cualificado",
-            "propuesta_pendiente_revision",
-        ):
-            raise ValueError(
-                "El lead debe estar cualificado."
-            )
-
-        evidencia = (
-            lead["extracto_fuente"]
-            or lead["necesidad_detectada"]
-            or ""
-        ).replace("\n", " ").strip()[:280]
-
-        propuesta = (
-            f"Hola, vi que {lead['empresa_o_persona']} podría "
-            f"tener una necesidad relacionada con datos web: "
-            f"«{evidencia}».\n\n"
-            "VIERNES Data Extractor ofrece búsquedas y extracción "
-            "estructurada mediante API para integrar datos web en "
-            "procesos internos sin construir el motor desde cero.\n\n"
-            "Podemos preparar una prueba limitada adaptada a vuestro "
-            "caso de uso. ¿Tiene sentido revisar un ejemplo?"
-        )
-
-        fecha = ahora()
-
-        cursor.execute(
-            """
-            UPDATE leads
-            SET propuesta = %s,
-                estado = %s,
-                fecha_ultima_actualizacion = %s
-            WHERE id = %s
-            """,
-            (
-                propuesta,
-                "propuesta_pendiente_revision",
-                fecha,
-                lead_id,
-            ),
-        )
-
-        cursor.execute(
-            """
-            INSERT INTO historial_lead (
-                lead_id,
-                fecha,
-                estado_anterior,
-                estado_nuevo,
-                nota
-            )
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                lead_id,
-                fecha,
-                lead["estado"],
-                "propuesta_pendiente_revision",
-                "Propuesta creada. Requiere revisión humana.",
-            ),
-        )
-
-    conexion.commit()
-    return propuesta
-
-
-if __name__ == "__main__":
-    try:
-        conexion = abrir_base_datos()
-        print(
-            json.dumps(
-                obtener_metricas(conexion),
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-        conexion.close()
-
-    except Exception as error:
-        print(f"Error: {error}", file=sys.stderr)
-        raise SystemExit(1)
