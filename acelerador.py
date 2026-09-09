@@ -1,6 +1,8 @@
 import os
 import secrets
 import sys
+from datetime import datetime
+from decimal import Decimal
 
 from flask import jsonify, request
 
@@ -149,6 +151,28 @@ def token_valido():
     )
 
 
+def convertir_json(valor):
+    if isinstance(valor, dict):
+        return {
+            clave: convertir_json(dato)
+            for clave, dato in valor.items()
+        }
+
+    if isinstance(valor, list):
+        return [
+            convertir_json(dato)
+            for dato in valor
+        ]
+
+    if isinstance(valor, datetime):
+        return valor.isoformat()
+
+    if isinstance(valor, Decimal):
+        return float(valor)
+
+    return valor
+
+
 if not any(
     regla.rule == "/pipeline/descubrir"
     for regla in flask_app.url_map.iter_rules()
@@ -180,11 +204,6 @@ if not any(
             finally:
                 conexion.close()
 
-            print(
-                "[ACELERADOR] Pipeline comercial ejecutado.",
-                flush=True
-            )
-
             return jsonify({
                 "status": "ok",
                 "nicho": NICHO_INICIAL,
@@ -200,6 +219,92 @@ if not any(
 
             return jsonify({
                 "error": "Error al ejecutar pipeline comercial"
+            }), 500
+
+
+if not any(
+    regla.rule == "/pipeline/metricas"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/pipeline/metricas",
+        methods=["GET"]
+    )
+    def ver_metricas_comerciales():
+        if not token_valido():
+            return jsonify({
+                "error": "No autorizado"
+            }), 401
+
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                obtener_metricas
+            )
+
+            conexion = abrir_base_datos()
+
+            try:
+                metricas = obtener_metricas(conexion)
+            finally:
+                conexion.close()
+
+            return jsonify({
+                "status": "ok",
+                "metricas": convertir_json(metricas)
+            }), 200
+
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error leyendo métricas: {error}",
+                flush=True
+            )
+
+            return jsonify({
+                "error": "Error al leer métricas"
+            }), 500
+
+
+if not any(
+    regla.rule == "/pipeline/leads"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/pipeline/leads",
+        methods=["GET"]
+    )
+    def ver_leads_comerciales():
+        if not token_valido():
+            return jsonify({
+                "error": "No autorizado"
+            }), 401
+
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                obtener_leads
+            )
+
+            conexion = abrir_base_datos()
+
+            try:
+                leads = obtener_leads(conexion, limite=20)
+            finally:
+                conexion.close()
+
+            return jsonify({
+                "status": "ok",
+                "leads": convertir_json(leads)
+            }), 200
+
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error leyendo leads: {error}",
+                flush=True
+            )
+
+            return jsonify({
+                "error": "Error al leer leads"
             }), 500
 
 
