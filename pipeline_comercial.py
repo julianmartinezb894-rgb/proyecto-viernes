@@ -50,6 +50,7 @@ DOMINIOS_DESCARTADOS = (
     "scrapingbee.com",
     "uniquesdata.com",
     "blog.datahut.co",
+    "browse.ai",
 )
 
 EXPRESIONES_CONTENIDO_NO_COMPRADOR = (
@@ -134,16 +135,23 @@ def puntuar_lead(resultado):
             "Sin evidencia temprana de demanda comercial y servicio compatible."
         )
 
-    puntuacion = 65
+    puntuacion = 55
 
-    if "contact" in evidencia_inicial or "email" in evidencia_inicial:
-        puntuacion += 10
+    tiene_contacto = (
+        "contact" in evidencia_inicial
+        or "email" in evidencia_inicial
+    )
 
-    if (
+    tiene_intencion_de_cotizar = (
         "request a quote" in evidencia_inicial
         or "get a quote" in evidencia_inicial
         or "pricing" in evidencia_inicial
-    ):
+    )
+
+    if tiene_contacto:
+        puntuacion += 10
+
+    if tiene_intencion_de_cotizar:
         puntuacion += 10
 
     contenido = str(
@@ -152,6 +160,9 @@ def puntuar_lead(resultado):
 
     if len(contenido) >= 180:
         puntuacion += 5
+
+    if not tiene_contacto and not tiene_intencion_de_cotizar:
+        puntuacion = min(puntuacion, 60)
 
     puntuacion = min(100, puntuacion)
 
@@ -372,6 +383,23 @@ def abrir_base_datos():
                 'aprobada_pendiente_ejecucion'
             )
             """
+        )
+
+        cursor.execute(
+            """
+            UPDATE leads
+            SET puntuacion = 0,
+                explicacion_puntuacion = %s,
+                fecha_ultima_actualizacion = %s
+            WHERE estado = 'descartado'
+              AND dominio = ANY(%s)
+              AND puntuacion <> 0
+            """,
+            (
+                "Fuente descartada por política comercial vigente.",
+                ahora(),
+                list(DOMINIOS_DESCARTADOS),
+            ),
         )
 
     conexion.commit()
@@ -885,10 +913,16 @@ def decidir_accion(conexion, accion_id, decision, nota=""):
                 """
                 UPDATE leads
                 SET estado = 'descartado',
+                    puntuacion = 0,
+                    explicacion_puntuacion = %s,
                     fecha_ultima_actualizacion = %s
                 WHERE id = %s
                 """,
-                (fecha, accion["lead_id"]),
+                (
+                    "Acción rechazada por decisión humana: " + nota,
+                    fecha,
+                    accion["lead_id"],
+                ),
             )
 
     conexion.commit()
