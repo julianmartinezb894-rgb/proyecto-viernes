@@ -136,13 +136,13 @@ def puntuar_lead(resultado):
 
     puntuacion = 65
 
-    if "contact" in texto or "email" in texto:
+    if "contact" in evidencia_inicial or "email" in evidencia_inicial:
         puntuacion += 10
 
     if (
-        "request a quote" in texto
-        or "get a quote" in texto
-        or "pricing" in texto
+        "request a quote" in evidencia_inicial
+        or "get a quote" in evidencia_inicial
+        or "pricing" in evidencia_inicial
     ):
         puntuacion += 10
 
