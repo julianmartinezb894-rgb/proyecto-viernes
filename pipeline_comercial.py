@@ -7,6 +7,11 @@ import psycopg
 from psycopg.rows import dict_row
 
 from buscador_web import buscar_web
+from correo_saliente import (
+    enviar_correo,
+    limite_diario_envios,
+    validar_destinatario,
+)
 
 
 ESTADOS_RECALIFICABLES = (
@@ -54,6 +59,10 @@ DOMINIOS_DESCARTADOS = (
 )
 
 EXPRESIONES_CONTENIDO_NO_COMPRADOR = (
+    "[for hire]",
+    "available for hire",
+    "available for projects",
+    "offering my services",
     "best web scraping",
     "top web scraping",
     "web scraping tools",
@@ -100,12 +109,17 @@ def ahora():
 
 
 def es_oportunidad_directa(url):
-    datos_url = urlparse(url)
-    dominio = datos_url.netloc.lower().replace(
-        "www.",
-        ""
+    try:
+        datos_url = urlparse(url)
+        dominio = (datos_url.hostname or "").lower().rstrip(".")
+    except ValueError:
+        return False
+    if datos_url.scheme not in {"http", "https"} or not dominio:
+        return False
+    return not any(
+        dominio == descartado or dominio.endswith("." + descartado)
+        for descartado in DOMINIOS_DESCARTADOS
     )
-    return bool(dominio) and dominio not in DOMINIOS_DESCARTADOS
 
 
 def puntuar_lead(resultado):
@@ -1127,6 +1141,110 @@ def decidir_accion(conexion, accion_id, decision, nota=""):
 
     conexion.commit()
     return actualizada
+
+
+def enviar_accion_por_correo(conexion, accion_id, destinatario):
+    """Envía una única acción ya aprobada; no reintenta después de un resultado ambiguo."""
+    correo = validar_destinatario(destinatario)
+    limite = limite_diario_envios()
+    if limite == 0:
+        raise ValueError(
+            "Los envíos están desactivados: VIERNES_MAX_ENVIOS_DIARIOS es 0."
+        )
+
+    with conexion.cursor() as cursor:
+        # Serializa el contador del día para que dos peticiones no excedan el límite.
+        cursor.execute("SELECT pg_advisory_xact_lock(902610)")
+        cursor.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM acciones_comerciales
+            WHERE estado IN ('enviando', 'enviada')
+              AND fecha_ejecucion >= date_trunc('day', NOW())
+            """
+        )
+        if int(cursor.fetchone()["total"]) >= limite:
+            raise ValueError("Se alcanzó el límite diario de envíos de VIERNES.")
+
+        cursor.execute(
+            """
+            SELECT a.*, l.titulo_fuente, l.empresa_o_persona
+            FROM acciones_comerciales a
+            JOIN leads l ON l.id = a.lead_id
+            WHERE a.id = %s
+              AND a.estado = 'aprobada_pendiente_ejecucion'
+            FOR UPDATE
+            """,
+            (accion_id,),
+        )
+        accion = cursor.fetchone()
+        if accion is None:
+            raise ValueError(
+                "La acción no está aprobada para envío o ya fue procesada."
+            )
+
+        fecha = ahora()
+        cursor.execute(
+            """
+            UPDATE acciones_comerciales
+            SET estado = 'enviando', fecha_ejecucion = %s,
+                resultado = jsonb_build_object(
+                    'canal', 'email', 'destinatario', %s, 'estado', 'enviando'
+                )
+            WHERE id = %s
+            """,
+            (fecha, correo, accion_id),
+        )
+    conexion.commit()
+
+    asunto = "VIERNES | paid data automation pilot"
+    try:
+        enviar_correo(correo, asunto, accion["contenido"])
+    except Exception as error:
+        with conexion.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE acciones_comerciales
+                SET estado = 'fallo_envio',
+                    resultado = jsonb_build_object(
+                        'canal', 'email', 'destinatario', %s,
+                        'estado', 'fallo_envio', 'error', %s
+                    )
+                WHERE id = %s AND estado = 'enviando'
+                RETURNING *
+                """,
+                (correo, type(error).__name__, accion_id),
+            )
+            resultado = cursor.fetchone()
+        conexion.commit()
+        raise RuntimeError(
+            "No se confirmó el envío. VIERNES no lo reintentará automáticamente."
+        ) from error
+
+    with conexion.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE acciones_comerciales
+            SET estado = 'enviada',
+                resultado = jsonb_build_object(
+                    'canal', 'email', 'destinatario', %s, 'estado', 'enviada'
+                )
+            WHERE id = %s AND estado = 'enviando'
+            RETURNING *
+            """,
+            (correo, accion_id),
+        )
+        resultado = cursor.fetchone()
+        cursor.execute(
+            """
+            UPDATE leads
+            SET estado = 'oferta_enviada', fecha_ultima_actualizacion = %s
+            WHERE id = %s
+            """,
+            (ahora(), accion["lead_id"]),
+        )
+    conexion.commit()
+    return resultado
 
 
 def obtener_estado_agente(conexion):
