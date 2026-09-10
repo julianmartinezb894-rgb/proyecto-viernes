@@ -36,6 +36,13 @@ EXPRESIONES_SERVICIO = (
     "web crawler",
     "data collection",
     "scrape data",
+    "n8n",
+    "automation",
+    "api integration",
+    "postgresql",
+    "excel",
+    "pdf extraction",
+    "document extraction",
 )
 
 DOMINIOS_DESCARTADOS = (
@@ -97,9 +104,19 @@ ESTRATEGIAS_AUTONOMAS = {
             '"RFP" "data collection API"',
         ),
     },
+    "automatizacion_pagada": {
+        "canal": "solicitudes_publicas",
+        "nicho": "pilotos pagados de automatización y procesamiento de datos",
+        "consultas": (
+            'site:community.n8n.io/t "looking for" n8n automation paid',
+            'site:community.n8n.io/t hiring n8n PostgreSQL email automation',
+            'site:community.n8n.io/t seeking "document extraction" Excel',
+        ),
+    },
 }
 
-MAX_FALLOS_CONSECUTIVOS = 3
+# Una estrategia que no devuelve ningún resultado no debe consumir días enteros.
+MAX_FALLOS_CONSECUTIVOS = 1
 
 
 def ahora():
