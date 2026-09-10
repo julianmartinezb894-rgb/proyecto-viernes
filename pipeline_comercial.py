@@ -700,6 +700,7 @@ def asegurar_objetivo_y_estrategia(conexion):
                 (nombre, configuracion["canal"], fecha),
             )
 
+        # Respeta el orden declarado hasta agotar los fallos permitidos.
         cursor.execute(
             """
             SELECT *
@@ -707,12 +708,15 @@ def asegurar_objetivo_y_estrategia(conexion):
             WHERE nombre = ANY(%s)
               AND estado = 'activa'
               AND fallos_consecutivos < %s
-            ORDER BY puntuacion_estrategia DESC,
-                     fallos_consecutivos ASC,
+            ORDER BY array_position(%s::text[], nombre),
                      id ASC
             LIMIT 1
             """,
-            (list(ESTRATEGIAS_AUTONOMAS), MAX_FALLOS_CONSECUTIVOS),
+            (
+                list(ESTRATEGIAS_AUTONOMAS),
+                MAX_FALLOS_CONSECUTIVOS,
+                list(ESTRATEGIAS_AUTONOMAS),
+            ),
         )
         estrategia = cursor.fetchone()
 
