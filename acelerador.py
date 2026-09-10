@@ -447,6 +447,52 @@ if not any(
             }), 500
 
 
+if not any(
+    regla.rule == "/agente/acciones/<int:accion_id>/enviar-correo"
+    for regla in flask_app.url_map.iter_rules()
+):
+    @flask_app.route(
+        "/agente/acciones/<int:accion_id>/enviar-correo",
+        methods=["POST"]
+    )
+    def enviar_correo_accion_agente(accion_id):
+        if not token_valido():
+            return jsonify({"error": "No autorizado"}), 401
+
+        datos = request.get_json(silent=True) or {}
+        destinatario = str(datos.get("destinatario", "")).strip()
+        try:
+            from pipeline_comercial import (
+                abrir_base_datos,
+                enviar_accion_por_correo,
+            )
+
+            conexion = abrir_base_datos()
+            try:
+                accion = enviar_accion_por_correo(
+                    conexion,
+                    accion_id,
+                    destinatario,
+                )
+            finally:
+                conexion.close()
+            return jsonify({
+                "status": "ok",
+                "accion": convertir_json(accion),
+            }), 200
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        except RuntimeError as error:
+            print(f"[ACELERADOR] {error}", flush=True)
+            return jsonify({"error": str(error)}), 502
+        except Exception as error:
+            print(
+                f"[ACELERADOR] Error enviando correo: {error}",
+                flush=True
+            )
+            return jsonify({"error": "Error al enviar el correo"}), 500
+
+
 def obtener_puerto():
     try:
         return int(
