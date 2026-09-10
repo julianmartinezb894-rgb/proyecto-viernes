@@ -113,6 +113,15 @@ ESTRATEGIAS_AUTONOMAS = {
             'site:community.n8n.io/t seeking "document extraction" Excel',
         ),
     },
+    "automatizacion_amplia": {
+        "canal": "prospeccion_directa",
+        "nicho": "compradores de automatización y procesamiento de datos",
+        "consultas": (
+            '"hiring" "n8n" "automation"',
+            '"looking for" "document extraction" "Excel"',
+            '"need" "PostgreSQL" "email automation"',
+        ),
+    },
 }
 
 # Una estrategia que no devuelve ningún resultado no debe consumir días enteros.
