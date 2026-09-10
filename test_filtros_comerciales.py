@@ -66,6 +66,14 @@ class FiltrosTests(unittest.TestCase):
         })
         self.assertGreater(score, 0)
 
+    def test_supplier_automation_is_not_qualified(self):
+        score, _ = namespace["puntuar_lead"]({
+            "url": "https://example.com/services",
+            "titulo": "Available for projects: n8n automation",
+            "contenido": "I offer API integration and data automation services.",
+        })
+        self.assertEqual(score, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
